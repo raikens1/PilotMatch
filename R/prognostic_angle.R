@@ -1,6 +1,6 @@
-out_file <- "data/angle_sigma1_results_"
+out_file <- "../data/angle_sigma1_results_"
 
-require(optmatch)
+require("optmatch")
 require(dplyr)
 require(magrittr)
 require(ggplot2)
@@ -179,12 +179,11 @@ experiment <- as.numeric(args[1])
 p <- as.numeric(args[2])
 
 # make simulation parameters
-n_rep <- 100 # should be 100
-rhos <-rep(seq(0, 1, .1), each = 50)
+n_rep <- 10 # should be 100
+rhos <-rep(seq(0, 1, .1)) #, each = 50
 
 # simulate and write to file
 results <- replicate(n_rep, simulate(generate_data(rho=rhos[experiment], p = p)),
-               simplify = FALSE) %>% 
-  	       bind_rows
+                     simplify = FALSE) %>% 
+  bind_rows
 write.csv(results, file = paste0(out_file, n_rep, "_", p, "_", experiment), row.names = FALSE)
-
