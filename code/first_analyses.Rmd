@@ -1,0 +1,43 @@
+---
+title: "Buffalo First Analysis"
+author: "Rachael Caelie (Rocky) Aikens"
+date: "3/22/2019"
+output: pdf_document
+---
+
+```{r setup, warning=FALSE, message = FALSE, include = FALSE}
+knitr::opts_chunk$set(cache=TRUE, warning = FALSE, message = FALSE, fig.align = "center", fig.height = 4)
+require(ggplot2)
+require(dplyr)
+theme_set(theme_light())
+```
+
+# Upload Data
+
+```{r}
+read_data <- function(i){
+  filename <- paste("../data/angle_sigma1_results_",i,"_10_10", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, read_data) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              bias = abs(estimate - true_tau), 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(mean_bias = mean(bias), mse = mean(squared_err), mean_gamma = mean(gamma)) %>%
+  ungroup()
+
+ggplot(plt_data, aes(x = rho, y = mean_bias, group = k, color = k)) + geom_line() + facet_wrap(~method)
+```
+
