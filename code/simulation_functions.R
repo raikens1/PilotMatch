@@ -19,7 +19,7 @@ require(bindrcpp)
 #' @return data.frame of covariates, y, t, and mu
 generate_data <- function(N = 2000,
                           p = 10,
-                          true_mu = "X1/3 - 4", 
+                          true_mu = "X1/3 - 3", 
             			        rho = 0,
                           sigma = 1) {
   df <- data.frame(matrix(rnorm(p*N), ncol = p))
