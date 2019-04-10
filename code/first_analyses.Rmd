@@ -16,7 +16,7 @@ theme_set(theme_light())
 
 ```{r}
 read_data <- function(i){
-  filename <- paste("../data/angle_sigma1_results_",i,"_10_10", sep = "")
+  filename <- paste("../data/angle_sigma1_results_",i,"_10_1000", sep = "")
   dat <- read.csv(filename) %>%
     mutate(rho = i/10)
   return(dat)
@@ -29,15 +29,17 @@ dat <- lapply(1:10, read_data) %>% bind_rows
 true_tau <- 1
 
 dat <- mutate(dat, 
-              bias = abs(estimate - true_tau), 
               squared_err = (estimate-true_tau)**2,
               k = as.factor(k))
 
 plt_data <- dat %>% 
   group_by(method, k, rho) %>% 
-  summarize(mean_bias = mean(bias), mse = mean(squared_err), mean_gamma = mean(gamma)) %>%
+  summarize(bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            variance = var(estimate),
+            mse = bias^2 + variance) %>%
   ungroup()
 
-ggplot(plt_data, aes(x = rho, y = mean_bias, group = k, color = k)) + geom_line() + facet_wrap(~method)
+ggplot(plt_data, aes(x = rho, y = variance, group = k, color = k)) + geom_line() + geom_point() + facet_wrap(~method)
 ```
 
