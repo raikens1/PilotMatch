@@ -10,9 +10,8 @@ knitr::opts_chunk$set(cache=TRUE, warning = FALSE, message = FALSE, fig.align = 
 require(ggplot2)
 require(dplyr)
 theme_set(theme_light())
+source("simulation_functions.R")
 ```
-
-# Upload Data
 
 ```{r}
 read_data <- function(i){
@@ -25,9 +24,59 @@ read_data <- function(i){
 dat <- lapply(1:10, read_data) %>% bind_rows
 ```
 
-# Performance Summary Plots
+# Set Up 
 
-```{r, fig.height=2}
+We compare the performance of propensity score matching, Mahalanobis distance matching, and Buffalo Matching (described in the previous section) on simulated data, varying the dimensionality of the problem, the fixed treatment to control ratio during matching, and the correlation between the true propensity and prognostic score. The generative model for all of our simulations is the following:
+\begin{align*}
+    X_i &\sim_{iid} \text{Normal}(0,I_p),\\
+    T_i &\sim_{iid} \text{Bernoulli}\left(\frac{1}{1+\exp(-\phi(X_i))}\right),\\
+    Y_i &=\tau T_i + \Psi(X_i) + \epsilon_i,\\
+    \epsilon_i &\sim_{iid} N(0,\sigma^2),
+\end{align*}
+where the true propensity and prognositic scores are given by the linear combinations
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3-4,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+so that $\text{Cor}(\phi(X_i), \Psi(X_i)) \propto \rho$.  The propensity score formula was chosen such that there were approximately 100 treated observations in each dataset (But there aren't actually 100 treated in each dataset???). We consider $p=10$, $\rho = 0, 0.1,\hdots, 0.9, 1.0,$ and $k=1,\hdots, 10$. Each simulation consisted of a dataset of size $n=2000$ and was repeated $N=1000$ times.
+We fix the treatment effect to be constant with $\tau=1$ and the noise to be $\sigma=1$.
+For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ using the permutation $t$-statistic from the package `sensitivtymv`
+
+# Replication of Dylan's Plots
+
+## Basic Visualization
+
+Here, I assume propensity and prognostic information are uncorrelated $\rho = 0$.
+
+```{r}
+#simulate data
+df <- generate_data(N = 2000, p = 10, true_mu = "X1/3-4", rho = 0, sigma = 1)
+k = 1
+prop_model = formula(t ~ . - mu - y)
+prog_model = formula(y ~ . - mu - t)
+
+# build propensity score
+propensity <- glm(prop_model, family = binomial(), data = df)
+  
+prop_match <- pairmatch(propensity, controls = k, df)
+  
+# 1:2 mahalanobis matching to select data to use for prognostic model
+mahal_dist <- match_on(prop_model, method = "mahalanobis", data = df)
+mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
+  
+prognostic_match(df, propensity, mahal_match, prog_model, k)
+
+# mahalanobis match
+m_match <- pairmatch(mahal_dist, controls = k, df)
+
+plt_data <- df %>% mutate(prog = X2, prop = X1/3 - 4, t = as.factor(t)) %>% select(c(t, prog, prop))
+ggplot(data = plt_data, aes( x = prop, y = prog, group = t, color = t)) + geom_point(alpha = 0.8)
+```
+
+
+## Performance for 1:1 to 1:10 matching as correllation of propensity and prognostic score is modified
+
+```{r}
 true_tau <- 1
 
 dat <- mutate(dat, 
@@ -36,16 +85,70 @@ dat <- mutate(dat,
 
 plt_data <- dat %>% 
   group_by(method, k, rho) %>% 
-  summarize(bias = abs(mean(estimate) - true_tau), 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
             median_gamma = median(gamma), 
-            variance = var(estimate),
-            mse = bias^2 + variance) %>%
+            Variance = var(estimate),
+            MSE = Bias^2 + Variance) %>%
   ungroup() %>%
-  mutate(method = recode(method, propensity = "Propensity", mahalanobis = "Mahalanobis", prognostic = "Buffalo"))
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
 
-ggplot(plt_data, aes(x = rho, y = bias, group = k, color = k)) + geom_line() + geom_point() + facet_wrap(~method)
-ggplot(plt_data, aes(x = rho, y = variance, group = k, color = k)) + geom_line() + geom_point() + facet_wrap(~method)
-ggplot(plt_data, aes(x = rho, y = mse, group = k, color = k)) + geom_line() + geom_point() + facet_wrap(~method)
-ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) + geom_line() + geom_point() + facet_wrap(~method)
+```{r, fig.height=3, echo = FALSE}
+ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) 
+
+ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))
+
+ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)
+
+ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)
+```
+
+\pagebreak
+
+# Rocky Versions
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.height=3, echo = FALSE}
+ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
 ```
 
