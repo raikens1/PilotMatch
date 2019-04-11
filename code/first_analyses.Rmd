@@ -16,7 +16,7 @@ theme_set(theme_light())
 
 ```{r}
 read_data <- function(i){
-  filename <- paste("../data/angle_sigma1_results_",i,"_10_1000", sep = "")
+  filename <- paste("../data/nsim_1000/angle_sigma1_results_",i,"_10_1000", sep = "")
   dat <- read.csv(filename) %>%
     mutate(rho = i/10)
   return(dat)
@@ -25,7 +25,9 @@ read_data <- function(i){
 dat <- lapply(1:10, read_data) %>% bind_rows
 ```
 
-```{r}
+# Performance Summary Plots
+
+```{r, fig.height=2}
 true_tau <- 1
 
 dat <- mutate(dat, 
@@ -38,8 +40,12 @@ plt_data <- dat %>%
             median_gamma = median(gamma), 
             variance = var(estimate),
             mse = bias^2 + variance) %>%
-  ungroup()
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", mahalanobis = "Mahalanobis", prognostic = "Buffalo"))
 
+ggplot(plt_data, aes(x = rho, y = bias, group = k, color = k)) + geom_line() + geom_point() + facet_wrap(~method)
 ggplot(plt_data, aes(x = rho, y = variance, group = k, color = k)) + geom_line() + geom_point() + facet_wrap(~method)
+ggplot(plt_data, aes(x = rho, y = mse, group = k, color = k)) + geom_line() + geom_point() + facet_wrap(~method)
+ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) + geom_line() + geom_point() + facet_wrap(~method)
 ```
 

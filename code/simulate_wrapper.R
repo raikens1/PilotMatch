@@ -13,12 +13,12 @@ out_file <- "angle_sigma1_results_"
 
 
 # get user arguements
-#args <- commandArgs(trailingOnly=TRUE)
+args <- commandArgs(trailingOnly=TRUE)
 
 # parse args
-#rho <- as.numeric(args[1])
-#p <- as.numeric(args[2])
-#nsim <- as.numeric(args[3])
+rho <- as.numeric(args[1])
+p <- as.numeric(args[2])
+nsim <- as.numeric(args[3])
 
 # simulate and write to file
 results <- pbreplicate(nsim, simulate(generate_data(rho=rho, p = p)),
