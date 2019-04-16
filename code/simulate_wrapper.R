@@ -2,7 +2,8 @@
 #' rho (float) describes angle between propensity and prognostic model
 #' p (int) number of covariates - must be at least 2
 #' nsim (int) number of simulations
-library(pbapply)
+
+t1 <- proc.time()
 source("../code/simulation_functions.R")
 
 # set default arguements
@@ -21,7 +22,7 @@ p <- as.numeric(args[2])
 nsim <- as.numeric(args[3])
 
 # simulate and write to file
-results <- pbreplicate(nsim, simulate(generate_data(rho=rho, p = p)),
+results <- replicate(nsim, simulate(generate_data(rho=rho, p = p, verbose = TRUE)),
                      simplify = FALSE) %>% 
   bind_rows
 write.csv(results, file = paste0(out_file, rho*10, "_", p, "_", nsim), row.names = FALSE)
@@ -32,4 +33,6 @@ message(paste("Rho:", rho))
 message(paste("p:",p))
 message(paste("nsim:", nsim))
 message(paste("output file:", paste0(out_file, rho*10, "_", p, "_", nsim)))
+message("Time elapsed")
+message(print(proc_time() - t1))
 message("********************")
