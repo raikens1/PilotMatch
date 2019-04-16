@@ -83,7 +83,8 @@ gamma_sensitivity <- function(ndf) {
 #' @return a data.frame with results from propensity, mahalanobis, and buffalo matching ??
 simulate <- function(df, n_control, 
                      prop_model = formula(t ~ . - mu - y), 
-                     prog_model = formula(y ~ . - mu - t)) {
+                     prog_model = formula(y ~ . - mu - t),
+                     verbose = FALSE) {
   
   if(sum(df$t)*11 > nrow(df)){
     return(data_frame())
@@ -92,7 +93,7 @@ simulate <- function(df, n_control,
   # propensity score matching for k = 1:10
   # store sensitivity and att in prop_df
   propensity <- glm(prop_model, family = binomial(), data = df)
-
+  
   f <- function(k){ 
     prop_match <- pairmatch(propensity, controls = k, df)
     return(reformat(df, prop_match, k))
@@ -130,7 +131,9 @@ simulate <- function(df, n_control,
                         k = 1:10,
                         estimate = sapply(ndfs, att_estimate),
                         gamma = sapply(ndfs, gamma_sensitivity))
-  
+  if (verbose){
+    message("Completed One Simulation")
+  }
   # return results for prop, prog, and mahal
   return(bind_rows(prop_df, prog_df, mahal_df))
 }
