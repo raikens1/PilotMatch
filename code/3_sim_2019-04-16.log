@@ -34,3 +34,16 @@ The following object is masked from ‘package:magrittr’:
 Loading required package: sensitivitymw
 Loading required package: tidyselect
 Loading required package: bindrcpp
+Warning messages:
+1: `parse_quosure()` is soft-deprecated as of rlang 0.2.0.
+Please use `parse_quo()` instead
+This warning is displayed once per session. 
+2: `data_frame()` is deprecated, use `tibble()`.
+This warning is displayed once per session. 
+********************
+Simulation complete:
+Rho: 0.3
+p: 10
+nsim: 1000
+output file: angle_sigma1_results_3_10_1000
+********************
