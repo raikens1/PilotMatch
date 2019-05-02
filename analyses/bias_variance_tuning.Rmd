@@ -35,6 +35,74 @@ so that $\text{Cor}(\phi(X_i), \Psi(X_i)) \propto \rho$.  The propensity score f
 We fix the treatment effect to be constant with $\tau=1$ and the noise to be $\sigma=1$.
 For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ using the permutation $t$-statistic from the package `sensitivtymv`
 
+We'd ideally like simulation parameters that give a cohen's d of about 0.2.
+
+This formulation of the problem has a cohen's d of about 0.69 (ranging about 0.4 - 0.9):
+
+```{r}
+cohen_d <- function(data){
+  data_summary <- data %>% 
+    group_by(t) %>%
+    summarize(var = var(y), n = n(), mean = mean(y)) %>%
+    ungroup()
+  
+  pool_sd <- (data_summary %>% summarize(pool_sd = sqrt(sum((n-1)*var)/(sum(n)-2))))$pool_sd[1]
+  
+  d <- (data_summary$mean[1]-data_summary$mean[2])/pool_sd
+  
+  return(abs(d))
+}
+```
+
+
+```{r}
+cohen_d_true_tau <- function(data, tau){
+  data_summary <- data %>% 
+    group_by(t) %>%
+    summarize(var = var(y), n = n(), mean = mean(y)) %>%
+    ungroup()
+  
+  pool_sd <- (data_summary %>% summarize(pool_sd = sqrt(sum((n-1)*var)/(sum(n)-2))))$pool_sd[1]
+  
+  d <- (tau)/pool_sd
+  
+  return(abs(d))
+}
+```
+
+This set up has the following cohen's d distributions, which is probably too high.
+
+```{r}
+plot_data <- sapply(0:10/10, 
+       function(x) replicate(50, cohen_d(generate_data(N=2000, p = 10, 
+                                                        true_mu = "X1-10/3", rho = x, 
+                                                        sigma = 1, tau = 1)))) %>% 
+  data.frame() %>%
+  gather(label, d, X1:X11) %>%
+  mutate(rho = as.factor(rep(0:10/10, each = 50))) %>%
+  select(-label)
+
+
+ggplot(plot_data, aes(x = rho, y = d)) + geom_boxplot() + ggtitle("Boxplot of Cohen's d")
+```
+
+
+A lot of the magnitude of Cohen's D above is actually caused by confounding rather than the effect of treatment; when rho is close to 1, the outcomes in the treatment and control groups appear farther apart because the covariate which determines treatment assignment also strongly determines outcome. If, instead of Cohen's D, we calculate the true causal effect divided by the pooled standard deviation of the outcome across treatment and controlled individuals, we get a different result:
+
+```{r}
+plot_data <- sapply(0:10/10, 
+       function(x) replicate(50, cohen_d_true_tau(generate_data(N=2000, p = 10, 
+                                                        true_mu = "X1-10/3", rho = x, 
+                                                        sigma = 1, tau = 1), tau = 1))) %>% 
+  data.frame() %>%
+  gather(label, d, X1:X11) %>%
+  mutate(rho = as.factor(rep(0:10/10, each = 50))) %>%
+  select(-label)
+
+
+ggplot(plot_data, aes(x = rho, y = d)) + geom_boxplot() + ggtitle("Boxplot of treatment effect over pooled sd")
+```
+
 # What we have already
 
 Below, we see the results of the latest complete batch of N = 1000 simulations, which use the exact set-up above.  One issue with this set of results is that the bias is on such a larger scale than the variance that the bias dominates the MSE, and the bias/variance tradeoffs of the different approaches aren't highlighted.
@@ -118,6 +186,40 @@ Suppose we switch to the following model:
     \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
     \tau &= 1/2
 \end{align*}
+
+This gives lower cohen's d:
+
+```{r}
+plot_data <- sapply(0:10/10, 
+       function(x) replicate(50, cohen_d(generate_data(N=2000, p = 10, 
+                                                        true_mu = "X1-10/3", rho = x, 
+                                                        sigma = 1, tau = 0.5)))) %>% 
+  data.frame() %>%
+  gather(label, d, X1:X11) %>%
+  mutate(rho = as.factor(rep(0:10/10, each = 50))) %>%
+  select(-label)
+
+
+ggplot(plot_data, aes(x = rho, y = d)) + geom_boxplot() + ggtitle("Boxplot of Cohen's d")
+```
+
+Also, the true effect divided by the pooled sd is lower:
+
+```{r}
+plot_data <- sapply(0:10/10, 
+       function(x) replicate(50, cohen_d_true_tau(generate_data(N=2000, p = 10, 
+                                                        true_mu = "X1-10/3", rho = x, 
+                                                        sigma = 1, tau = 0.5), tau = 0.5))) %>% 
+  data.frame() %>%
+  gather(label, d, X1:X11) %>%
+  mutate(rho = as.factor(rep(0:10/10, each = 50))) %>%
+  select(-label)
+
+
+ggplot(plot_data, aes(x = rho, y = d)) + geom_boxplot() + ggtitle("Boxplot of treatment effect over pooled sd")
+```
+
+And bias and variance are closer to the same scale.
 
 ```{r}
 read_data <- function(i, path_to_file){

@@ -15,17 +15,19 @@ require(bindrcpp)
 #' @param p numeric, number of features
 #' @param true_mu string formula giving true propensity score linear model
 #' @param rho numeric between 0 and 1.  0 => prog orthogonal to prop, 1=> prog || prop
-#' @param sigma noise to be added to y. y += sigma*rnorm(0,1)
+#' @param sigma numeric noise to be added to y. y += sigma*rnorm(0,1)
+#' @param tau numeric additive treatment effect
 #' @return data.frame of covariates, y, t, and mu
 generate_data <- function(N = 2000,
                           p = 10,
                           true_mu = "X1-10/3", 
             			        rho = 0,
-                          sigma = 1) {
+                          sigma = 1,
+            			        tau = 1) {
   df <- data.frame(matrix(rnorm(p*N), ncol = p))
   df <- df %>% mutate(mu = !!parse_quosure(true_mu))
   df <- df %>% mutate(t = rbinom(n = N, size = 1, prob = 1/(1+exp(-mu))))
-  df <- df %>% mutate(y = t + rho*X1 + sqrt(1-rho^2)*X2)
+  df <- df %>% mutate(y = tau*t + rho*X1 + sqrt(1-rho^2)*X2)
   noise <- rnorm(N)
   df$y <- df$y + sigma*noise
   return(df)
