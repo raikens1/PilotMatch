@@ -1,0 +1,683 @@
+---
+title: "Bias Variance Tuning"
+author: "Rachael Caelie (Rocky) Aikens"
+date: "5/1/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, warning=FALSE, message = FALSE, include = FALSE}
+knitr::opts_chunk$set(cache=FALSE, warning = FALSE, message = FALSE, echo = FALSE, fig.align = "center", fig.height = 4)
+require(ggplot2)
+require(dplyr)
+require(gridExtra)
+require(ggpubr)
+theme_set(theme_light())
+source("../code/simulation_functions.R")
+```
+
+# Set Up 
+
+We compare the performance of propensity score matching, Mahalanobis distance matching, and Buffalo Matching (described in the previous section) on simulated data, varying the dimensionality of the problem, the fixed treatment to control ratio during matching, and the correlation between the true propensity and prognostic score. The generative model for all of our simulations is the following:
+\begin{align*}
+    X_i &\sim_{iid} \text{Normal}(0,I_p),\\
+    T_i &\sim_{iid} \text{Bernoulli}\left(\frac{1}{1+\exp(-\phi(X_i))}\right),\\
+    Y_i &=\tau T_i + \Psi(X_i) + \epsilon_i,\\
+    \epsilon_i &\sim_{iid} N(0,\sigma^2),
+\end{align*}
+where the true propensity and prognositic scores are given by the linear combinations
+\begin{align*}
+    \phi(X_i) &= X_{i1} - 10/3,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+so that $\text{Cor}(\phi(X_i), \Psi(X_i)) \propto \rho$.  The propensity score formula was chosen such that there were approximately 100 treated observations in each dataset. We consider $p=10$, $\rho = 0, 0.1,\hdots, 0.9, 1.0,$ and $k=1,\hdots, 10$. Each simulation consisted of a dataset of size $n=2000$ and was repeated $N=1000$ times.
+We fix the treatment effect to be constant with $\tau=1$ and the noise to be $\sigma=1$.
+For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ using the permutation $t$-statistic from the package `sensitivtymv`
+
+We'd ideally like simulation parameters that give a cohen's d of about 0.2.
+
+This formulation of the problem has a cohen's d of about 0.69 (ranging about 0.4 - 0.9):
+
+```{r}
+cohen_d <- function(data){
+  data_summary <- data %>% 
+    group_by(t) %>%
+    summarize(var = var(y), n = n(), mean = mean(y)) %>%
+    ungroup()
+  
+  pool_sd <- (data_summary %>% summarize(pool_sd = sqrt(sum((n-1)*var)/(sum(n)-2))))$pool_sd[1]
+  
+  d <- (data_summary$mean[1]-data_summary$mean[2])/pool_sd
+  
+  return(abs(d))
+}
+```
+
+
+```{r}
+cohen_d_true_tau <- function(data, tau){
+  data_summary <- data %>% 
+    group_by(t) %>%
+    summarize(var = var(y), n = n(), mean = mean(y)) %>%
+    ungroup()
+  
+  pool_sd <- (data_summary %>% summarize(pool_sd = sqrt(sum((n-1)*var)/(sum(n)-2))))$pool_sd[1]
+  
+  d <- (tau)/pool_sd
+  
+  return(abs(d))
+}
+```
+
+This set up has the following cohen's d distributions, which is probably too high.
+
+```{r}
+plot_data <- sapply(0:10/10, 
+       function(x) replicate(50, cohen_d(generate_data(N=2000, p = 10, 
+                                                        true_mu = "X1-10/3", rho = x, 
+                                                        sigma = 1, tau = 1)))) %>% 
+  data.frame() %>%
+  gather(label, d, X1:X11) %>%
+  mutate(rho = as.factor(rep(0:10/10, each = 50))) %>%
+  select(-label)
+
+
+ggplot(plot_data, aes(x = rho, y = d)) + geom_boxplot() + ggtitle("Boxplot of Cohen's d")
+```
+
+
+A lot of the magnitude of Cohen's D above is actually caused by confounding rather than the effect of treatment; when rho is close to 1, the outcomes in the treatment and control groups appear farther apart because the covariate which determines treatment assignment also strongly determines outcome. If, instead of Cohen's D, we calculate the true causal effect divided by the pooled standard deviation of the outcome across treatment and controlled individuals, we get a different result:
+
+```{r}
+plot_data <- sapply(0:10/10, 
+       function(x) replicate(50, cohen_d_true_tau(generate_data(N=2000, p = 10, 
+                                                        true_mu = "X1-10/3", rho = x, 
+                                                        sigma = 1, tau = 1), tau = 1))) %>% 
+  data.frame() %>%
+  gather(label, d, X1:X11) %>%
+  mutate(rho = as.factor(rep(0:10/10, each = 50))) %>%
+  select(-label)
+
+
+ggplot(plot_data, aes(x = rho, y = d)) + geom_boxplot() + ggtitle("Boxplot of treatment effect over pooled sd")
+```
+
+# What we have already
+
+Below, we see the results of the latest complete batch of N = 1000 simulations, which use the exact set-up above.  One issue with this set of results is that the bias is on such a larger scale than the variance that the bias dominates the MSE, and the bias/variance tradeoffs of the different approaches aren't highlighted.
+
+```{r}
+read_data_1000 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/mu_x1_minus_10_3rds/nsim_1000/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Variance = var(estimate),
+            MSE = Bias^2 + Variance) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+```
+
+\pagebreak
+
+
+
+# Playing with Tau
+
+Suppose we switch to the following model:
+
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3 - 3,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+    \tau &= 1/2
+\end{align*}
+
+This gives lower cohen's d:
+
+```{r}
+plot_data <- sapply(0:10/10, 
+       function(x) replicate(50, cohen_d(generate_data(N=2000, p = 10, 
+                                                        true_mu = "X1-10/3", rho = x, 
+                                                        sigma = 1, tau = 0.5)))) %>% 
+  data.frame() %>%
+  gather(label, d, X1:X11) %>%
+  mutate(rho = as.factor(rep(0:10/10, each = 50))) %>%
+  select(-label)
+
+
+ggplot(plot_data, aes(x = rho, y = d)) + geom_boxplot() + ggtitle("Boxplot of Cohen's d")
+```
+
+Also, the true effect divided by the pooled sd is lower:
+
+```{r}
+plot_data <- sapply(0:10/10, 
+       function(x) replicate(50, cohen_d_true_tau(generate_data(N=2000, p = 10, 
+                                                        true_mu = "X1-10/3", rho = x, 
+                                                        sigma = 1, tau = 0.5), tau = 0.5))) %>% 
+  data.frame() %>%
+  gather(label, d, X1:X11) %>%
+  mutate(rho = as.factor(rep(0:10/10, each = 50))) %>%
+  select(-label)
+
+
+ggplot(plot_data, aes(x = rho, y = d)) + geom_boxplot() + ggtitle("Boxplot of treatment effect over pooled sd")
+```
+
+And bias and variance are closer to the same scale.
+
+```{r}
+read_data <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_10", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data(x, "../data/tau_half/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 0.5
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Variance = var(estimate),
+            MSE = Bias^2 + Variance) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+```
+
+# Playing with Sigma
+
+## Sigma = 2
+
+Another solution is increasing the noise.  Suppose we have this model:
+
+\begin{align*}
+    X_i &\sim_{iid} \text{Normal}(0,I_p),\\
+    T_i &\sim_{iid} \text{Bernoulli}\left(\frac{1}{1+\exp(-\phi(X_i))}\right),\\
+    Y_i &=\tau T_i + \Psi(X_i) + \epsilon_i,\\
+    \epsilon_i &\sim_{iid} N(0,\sigma^2),
+\end{align*}
+
+With the following formulae for propensity and prognosis
+
+\begin{align*}
+    \phi(X_i) &= X_{i1} - 10/3,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+Except that we let $\sigma = 2$.  
+
+```{r}
+dat <- lapply(1:10, function(x) read_data(x, "../data/sigma_2/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Variance = var(estimate),
+            MSE = Bias^2 + Variance) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+```
+
+
+# Playing with Propensity
+
+## Phi = X1/3 - 4
+
+This is the model that Dylan was using when I took over:
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3 - 4,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+It's nice, because it puts bias and variance on the same approximate scale, but it allows the number of treated individuals to drop to 30-40, rather than 100.  Buffalo also does weirdly poorly in terms of gamma compared to mahalanobis.
+
+```{r}
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/mu_x1_over_3_minus_4/nsim_1000/")) %>% bind_rows
+```
+
+```{r, echo = TRUE}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Variance = var(estimate),
+            MSE = Bias^2 + Variance) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.height=3, echo = FALSE}
+ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+```
+
+## Phi = X1/3 - 3
+
+Suppose we switch to the following model:
+
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3 - 3,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+This decreases the importance of $X_1$ in determining treatment assignment, while keeping the number of treated individuals at approximately 100.  Doing this decreases bias while increasing variance.
+
+```{r}
+read_data <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_10", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data(x, "../data/mu_x1_over_3_minus_3/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Variance = var(estimate),
+            MSE = Bias^2 + Variance) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+```
+
+
+One thing here that I'm not crazy about is that when we diminish the importance of $X_1$ in determining treatment assignment, we get closer and closer to random treatment assignment, which maybe isn't the use case that we're most interested in. Below, I've printed a histogram of $\phi$ for treated (red) and control (blue) individuals.  On the left, we see what happens when $\phi = X_1/3 - 3$, and on the right, we see what happens when $\phi = X1 - 10/3$.
+
+```{r, fig.height=3}
+overlap_histogram <- function(data, rho = 0){
+    plt_data <- data %>% 
+      mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = mu,
+           t = as.factor(abs(1-t))) %>%
+      select(c(t, prog, prop))
+    
+    ggplot(plt_data, aes(x = prop, fill = t)) + geom_histogram(alpha = 0.4, position = "identity")
+}
+
+overlap_histogram(generate_data(true_mu = "X1/3-3"))
+overlap_histogram(generate_data(true_mu = "X1-10/3"))
+```
+
+
+# Playing with Prognosis
+
+## Psi times 3
+
+Suppose we switch to the following model:
+
+\begin{align*}
+    \phi(X_i) &= X_{i1} - 10/3,\\
+    \Psi(X_i) &=3\rho X_{i1} + 3\sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+Then bias and variance both increase, but variance increases more than bias.  This makes bias and variance closer to the same scale (but not quite the same).  The maximum bias can be about 10 times the maximum variance.  Also worth noting: Gamma for the buffalo goes _way_ up.
+
+```{r}
+read_data <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_10", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data(x, "../data/psi_times_3/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Variance = var(estimate),
+            MSE = Bias^2 + Variance) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+```
+
+## Psi times 6
+
+Now suppose we emphasize these relationships even more:
+
+\begin{align*}
+    \phi(X_i) &= X_{i1} - 10/3,\\
+    \Psi(X_i) &=6\rho X_{i1} + 6\sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+As we might expect, the behavior from the previous experiment is amplified.  Bias goes up, but variance goes up more.  Now the bias can be about 5 times the variance.  Gamma for the buffalo skyrockets.
+
+```{r}
+read_data <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_10", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data(x, "../data/psi_times_6/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Variance = var(estimate),
+            MSE = Bias^2 + Variance) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+```

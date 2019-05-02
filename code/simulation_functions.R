@@ -15,17 +15,19 @@ require(bindrcpp)
 #' @param p numeric, number of features
 #' @param true_mu string formula giving true propensity score linear model
 #' @param rho numeric between 0 and 1.  0 => prog orthogonal to prop, 1=> prog || prop
-#' @param sigma noise to be added to y. y += sigma*rnorm(0,1)
+#' @param sigma numeric noise to be added to y. y += sigma*rnorm(0,1)
+#' @param tau numeric additive treatment effect
 #' @return data.frame of covariates, y, t, and mu
 generate_data <- function(N = 2000,
                           p = 10,
-                          true_mu = "X1/3 - 4", 
+                          true_mu = "X1-10/3", 
             			        rho = 0,
-                          sigma = 1) {
+                          sigma = 1,
+            			        tau = 1) {
   df <- data.frame(matrix(rnorm(p*N), ncol = p))
   df <- df %>% mutate(mu = !!parse_quosure(true_mu))
   df <- df %>% mutate(t = rbinom(n = N, size = 1, prob = 1/(1+exp(-mu))))
-  df <- df %>% mutate(y = t + rho*X1 + sqrt(1-rho^2)*X2)
+  df <- df %>% mutate(y = tau*t + rho*X1 + sqrt(1-rho^2)*X2)
   noise <- rnorm(N)
   df$y <- df$y + sigma*noise
   return(df)
@@ -77,13 +79,15 @@ gamma_sensitivity <- function(ndf) {
 
 #' @title simulate 
 #' @param df, a data.frame from generate_data
-#' @param n_control, the number of controls (not used?)
 #' @param prop_model, the propensity score model
 #' @param prog_model, the prognostic score model
+#' @param ks, a vector of positive numbers indicating the number of controls to match to each treated
 #' @return a data.frame with results from propensity, mahalanobis, and buffalo matching ??
-simulate <- function(df, n_control, 
+simulate <- function(df, 
                      prop_model = formula(t ~ . - mu - y), 
-                     prog_model = formula(y ~ . - mu - t)) {
+                     prog_model = formula(y ~ . - mu - t),
+                     verbose = FALSE,
+                     ks = 1:10) {
   
   if(sum(df$t)*11 > nrow(df)){
     return(data_frame())
@@ -92,14 +96,14 @@ simulate <- function(df, n_control,
   # propensity score matching for k = 1:10
   # store sensitivity and att in prop_df
   propensity <- glm(prop_model, family = binomial(), data = df)
-
+  
   f <- function(k){ 
     prop_match <- pairmatch(propensity, controls = k, df)
     return(reformat(df, prop_match, k))
   }
-  ndfs <- sapply(1:10, f, simplify = FALSE)
+  ndfs <- sapply(ks, f, simplify = FALSE)
   prop_df <- data_frame(method = "propensity",
-                        k = 1:10,
+                        k = ks,
 			estimate = sapply(ndfs, att_estimate),
 			gamma = sapply(ndfs, gamma_sensitivity))
   
@@ -107,14 +111,14 @@ simulate <- function(df, n_control,
   mahal_dist <- match_on(prop_model, method = "mahalanobis", data = df)
   mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
   
-  # perform prognostic score matching for k = 1:10
+  # perform prognostic score matching for k in ks
   # store sensitivity and att in prog_df
   g <- function(k){
      prognostic_match(df, propensity, mahal_match, prog_model, k)
   }
-  ndfs <- sapply(1:10, g, simplify = FALSE)
+  ndfs <- sapply(ks, g, simplify = FALSE)
   prog_df <- data_frame(method = "prognostic",
-                        k = 1:10,
+                        k = ks,
 			estimate = sapply(ndfs, att_estimate),
 			gamma = sapply(ndfs, gamma_sensitivity))
   
@@ -125,12 +129,14 @@ simulate <- function(df, n_control,
     return(reformat(df, m_match, k))
   }
 
-  ndfs <- sapply(1:10, h, simplify = FALSE)
+  ndfs <- sapply(ks, h, simplify = FALSE)
   mahal_df <- data_frame(method = "mahalanobis",
-                        k = 1:10,
+                        k = ks,
                         estimate = sapply(ndfs, att_estimate),
                         gamma = sapply(ndfs, gamma_sensitivity))
-  
+  if (verbose){
+    message("Completed One Simulation")
+  }
   # return results for prop, prog, and mahal
   return(bind_rows(prop_df, prog_df, mahal_df))
 }

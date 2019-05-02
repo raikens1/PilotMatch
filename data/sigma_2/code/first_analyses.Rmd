@@ -1,0 +1,355 @@
+---
+title: "Buffalo First Analysis"
+author: "Rachael Caelie (Rocky) Aikens"
+date: "3/22/2019"
+output: pdf_document
+---
+
+```{r setup, warning=FALSE, message = FALSE, include = FALSE}
+knitr::opts_chunk$set(cache=TRUE, warning = FALSE, message = FALSE, echo = FALSE, fig.align = "center", fig.height = 4)
+require(ggplot2)
+require(dplyr)
+require(gridExtra)
+require(ggpubr)
+theme_set(theme_light())
+source("simulation_functions.R")
+```
+
+# Set Up 
+
+We compare the performance of propensity score matching, Mahalanobis distance matching, and Buffalo Matching (described in the previous section) on simulated data, varying the dimensionality of the problem, the fixed treatment to control ratio during matching, and the correlation between the true propensity and prognostic score. The generative model for all of our simulations is the following:
+\begin{align*}
+    X_i &\sim_{iid} \text{Normal}(0,I_p),\\
+    T_i &\sim_{iid} \text{Bernoulli}\left(\frac{1}{1+\exp(-\phi(X_i))}\right),\\
+    Y_i &=\tau T_i + \Psi(X_i) + \epsilon_i,\\
+    \epsilon_i &\sim_{iid} N(0,\sigma^2),
+\end{align*}
+where the true propensity and prognositic scores are given by the linear combinations
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3-4,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+so that $\text{Cor}(\phi(X_i), \Psi(X_i)) \propto \rho$.  The propensity score formula was chosen such that there were approximately 100 treated observations in each dataset (But there aren't actually 100 treated in each dataset???). We consider $p=10$, $\rho = 0, 0.1,\hdots, 0.9, 1.0,$ and $k=1,\hdots, 10$. Each simulation consisted of a dataset of size $n=2000$ and was repeated $N=1000$ times.
+We fix the treatment effect to be constant with $\tau=1$ and the noise to be $\sigma=1$.
+For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ using the permutation $t$-statistic from the package `sensitivtymv`
+
+\pagebreak
+
+# Replication of Dylan's Plots
+
+## Basic Visualization
+
+Here, I assume propensity and prognostic information are uncorrelated $\rho = 0$.
+
+```{r}
+match_viz <- function(data, match, rho, k = 1, title = "Matching"){
+  plt_data <- data %>% 
+    mutate(m = match) %>%
+    mutate(a = ifelse (is.na(m), 0.9, 1)) %>% 
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = mu,
+           t = as.factor(abs(1-t))) %>%
+    select(c(t, prog, prop, m, a))
+  
+  m_data <- plt_data %>% 
+    filter(!is.na(m)) %>%
+    arrange(m, desc(t)) %>% 
+    mutate(id = rep(1:(k + 1), sum(data$t))) %>%
+    select(-c(t, a)) %>%
+    group_by(m) %>%
+    summarize(prop1 = first(prop), prop2 = last(prop),
+              prog1 = first(prog), prog2 = last(prog)) %>%
+    select(prog1, prog2, prop1, prop2)
+  
+  plt <- ggplot(data = plt_data, aes( x = prop, y = prog, group = t, color = t)) + 
+    geom_point(aes(alpha = a))+
+    scale_color_brewer(palette="Set1") +
+    geom_segment(data = m_data, 
+                 aes(x = prop1, y = prog1,
+                     xend = prop2, yend = prog2),
+                 color =  "black", group = NA, linetype = "dashed") +
+    ggtitle( title)+
+    theme(legend.position = "none", aspect.ratio=1, plot.title = element_text(hjust = 0.5, size = 8))+
+    ylab(expression(paste(Psi, "(x)", sep = ""))) +
+    xlab(expression(paste("logit(e(x))")))
+  
+  return(plt)
+}
+
+overlap_histogram <- function(data){
+    plt_data <- data %>% 
+      mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = mu,
+           t = as.factor(abs(1-t))) %>%
+      select(c(t, prog, prop))
+    
+    ggplot(plt_data, aes(x = prop, fill = t)) + geom_histogram(alpha = 0.4, position = "identity")
+}
+
+# like prognostic match except returns data frame and match assignments, not just the
+# reformatted dataframe of outcomes by match assignment
+prognostic_match_assignment <- function(df, propensity, match_assignment, prog_model, n_control) {
+  df$m <- match_assignment
+  df$row <- 1:nrow(df)
+  n_t<- sum(df$t)
+
+  selected <- df %>% 
+    filter(!is.na(m)) %>%
+    filter(t==0) %>%
+    group_by(m) %>%
+    sample_n(size = 1)
+  
+  prognostic <- lm(y ~ . - mu - t - row - m, data = selected)
+  not_selected <- df[-selected$row, ]
+  not_selected <- not_selected %>% 
+			mutate(progscore = predict(prognostic, not_selected)) %>%
+			mutate(propscore = predict(propensity, not_selected))
+  prog_dist <- match_on(t ~ progscore + propscore, data = not_selected)
+  prog_match <- pairmatch(prog_dist, controls = n_control, data = not_selected) 
+  return(list(df = not_selected, match = prog_match, k = n_control))
+}
+```
+
+```{r}
+rho <- 0
+#simulate data
+df <- generate_data(N = 2000, p = 10, true_mu = "X1/3-3", rho = rho, sigma = 1)
+k = 1
+prop_model = formula(t ~ . - mu - y)
+prog_model = formula(y ~ . - mu - t)
+
+# mahalanobis match
+mahal_dist <- match_on(prop_model, method = "mahalanobis", data = df)
+m_match <- pairmatch(mahal_dist, controls = k, df)
+```
+
+
+```{r}
+# Build scores empirically for propensity and prognostic match
+
+# build propensity score
+propensity <- glm(prop_model, family = binomial(), data = df)
+  
+prop_match <- pairmatch(propensity, controls = k, df)
+  
+# 1:2 mahalanobis matching to select data to use for prognostic model
+mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
+  
+buff_match_assignment <- prognostic_match_assignment(df, propensity, mahal_match, prog_model, k)
+```
+
+
+```{r}
+#Calculate true propensity and prognostic score, and match on the true score
+oracle_df <- df %>% 
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = 1/(1+exp(-(mu))))
+
+oracle_prop_match <- pairmatch(t ~ prop, controls = k, oracle_df)
+oracle_prog_match <- pairmatch(t ~ prog + prop, controls = k, oracle_df)
+```
+
+Below, we imagine that we know the true propensity and prognostic scores, and we match on those for buffalo and propensity score matching.  Unsurprisingly, life is very good for buffalo matchers when the true scores are known.
+
+```{r, fig.width=8.5, fig.height= 3.5}
+a <- match_viz(df, m_match, rho, title = "Mahalanobis")
+b <- match_viz(df, oracle_prop_match, rho, title = "True Propensity")
+c <- match_viz(df, oracle_prog_match, rho, title = "True Propensity x Prognosis")
+
+grid.arrange(a,b,c, ncol= 3)
+```
+
+Now, we take the same data set and imagine that we don't know the true propensity and prognostic scores, and so must build them empirically.  For propensity score matching, we build a logistic regression of treatment assigment on all of the variables, using the entire dataset. For buffalo, we use the propensity score logistic regression in addition to a prognostic score, which we fit on a subset of the controls that are chosen to be good matches to the treated individuals based on mahalanobis distance.
+
+
+```{r, fig.width = 8.5, fig.height = 3.5}
+a <- match_viz(df, m_match, rho, title = "Mahalanobis")
+b <- match_viz(df, prop_match, rho, title = "Estimated Propensity")
+c <- match_viz(buff_match_assignment$df, buff_match_assignment$match, rho, title = "Buffalo")
+
+grid.arrange(a, b, c, ncol = 3)
+```
+
+\pagebreak
+
+## Performance for 1:1 to 1:10 matching as correllation of propensity and prognostic score is modified
+
+```{r}
+read_data <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data(x, "../data/mu_x1_over_3_minus_4/nsim_1000/")) %>% bind_rows
+```
+
+```{r, echo = TRUE}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Variance = var(estimate),
+            MSE = Bias^2 + Variance) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, fig.height=3, echo = FALSE}
+ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) 
+
+ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))
+
+ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)
+
+ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)
+```
+
+\pagebreak
+
+# Rocky Versions
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.height=3, echo = FALSE}
+ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+```
+
+\pagebreak
+
+# Plots with new propensity function
+
+Now we let $\phi(X_i) = X_{i1}- 10/3.$  This keeps the number of treated individuals close to 100 while preserving the value of $\rho$ as the true correllation between $\phi$ and $\Psi$.
+
+```{r}
+dat <- lapply(1:10, function(x) read_data(x, "../data/mu_x1_minus_10_3rds/nsim_1000/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Variance = var(estimate),
+            MSE = Bias^2 + Variance) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, fig.height=3, echo = FALSE}
+ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) 
+
+ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))
+
+ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)
+
+ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)
+```
+
+\pagebreak
+
+# New color scheme
+
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+```
+```
+

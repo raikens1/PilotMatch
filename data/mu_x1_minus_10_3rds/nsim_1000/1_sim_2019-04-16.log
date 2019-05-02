@@ -1,0 +1,49 @@
+Loading required package: optmatch
+Loading required package: survival
+The optmatch package has an academic license. Enter relaxinfo() for more information.
+Loading required package: dplyr
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+Loading required package: magrittr
+Loading required package: ggplot2
+Loading required package: rlang
+
+Attaching package: ‘rlang’
+
+The following object is masked from ‘package:magrittr’:
+
+    set_names
+
+Loading required package: tidyr
+
+Attaching package: ‘tidyr’
+
+The following object is masked from ‘package:magrittr’:
+
+    extract
+
+Loading required package: sensitivitymw
+Loading required package: tidyselect
+Loading required package: bindrcpp
+Warning messages:
+1: `parse_quosure()` is soft-deprecated as of rlang 0.2.0.
+Please use `parse_quo()` instead
+This warning is displayed once per session. 
+2: `data_frame()` is deprecated, use `tibble()`.
+This warning is displayed once per session. 
+********************
+Simulation complete:
+Rho: 0.1
+p: 10
+nsim: 1000
+output file: angle_sigma1_results_1_10_1000
+********************

@@ -1,0 +1,166 @@
+---
+title: "Match quality when prognosis and propensity are highly correllated"
+author: "Rachael Caelie (Rocky) Aikens"
+date: "4/23/2019"
+output: pdf_document
+---
+
+```{r setup, warning=FALSE, message = FALSE, include = FALSE}
+knitr::opts_chunk$set(cache=TRUE, warning = FALSE, message = FALSE, echo = FALSE, fig.align = "center", fig.height = 4)
+require(ggplot2)
+require(dplyr)
+require(gridExtra)
+require(ggpubr)
+theme_set(theme_light())
+source("simulation_functions.R")
+```
+
+# Set Up 
+
+We compare the performance of propensity score matching, Mahalanobis distance matching, and Buffalo Matching (described in the previous section) on simulated data, varying the dimensionality of the problem, the fixed treatment to control ratio during matching, and the correlation between the true propensity and prognostic score. The generative model for all of our simulations is the following:
+\begin{align*}
+    X_i &\sim_{iid} \text{Normal}(0,I_p),\\
+    T_i &\sim_{iid} \text{Bernoulli}\left(\frac{1}{1+\exp(-\phi(X_i))}\right),\\
+    Y_i &=\tau T_i + \Psi(X_i) + \epsilon_i,\\
+    \epsilon_i &\sim_{iid} N(0,\sigma^2),
+\end{align*}
+where the true propensity and prognositic scores are given by the linear combinations
+\begin{align*}
+    \phi(X_i) &= X_{i1}-10/3,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+so that $\text{Cor}(\phi(X_i), \Psi(X_i)) \propto \rho$.  The propensity score formula was chosen such that there were approximately 100 treated observations in each dataset. We consider $p=10$, $\rho = 0, 0.1,\hdots, 0.9, 1.0,$ and $k=1,\hdots, 10$. Each simulation consisted of a dataset of size $n=2000$ and was repeated $N=1000$ times.
+We fix the treatment effect to be constant with $\tau=1$ and the noise to be $\sigma=1$.
+For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ using the permutation $t$-statistic from the package `sensitivtymv`
+
+\pagebreak
+
+# Replication of Dylan's Plots
+
+## Basic Visualization
+
+Here, I assume propensity and prognostic information are highly correllated $rho = 0.9$.
+
+```{r}
+match_viz <- function(data, match, rho, k = 1, title = "Matching"){
+  plt_data <- data %>% 
+    mutate(m = match) %>%
+    mutate(a = ifelse (is.na(m), 0.9, 1)) %>% 
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = mu,
+           t = as.factor(abs(1-t))) %>%
+    select(c(t, prog, prop, m, a))
+  
+  m_data <- plt_data %>% 
+    filter(!is.na(m)) %>%
+    arrange(m, desc(t)) %>% 
+    mutate(id = rep(1:(k + 1), sum(data$t))) %>%
+    select(-c(t, a)) %>%
+    group_by(m) %>%
+    summarize(prop1 = first(prop), prop2 = last(prop),
+              prog1 = first(prog), prog2 = last(prog)) %>%
+    select(prog1, prog2, prop1, prop2)
+  
+  plt <- ggplot(data = plt_data, aes( x = prop, y = prog, group = t, color = t)) + 
+    geom_point(aes(alpha = a))+
+    scale_color_brewer(palette="Set1") +
+    geom_segment(data = m_data, 
+                 aes(x = prop1, y = prog1,
+                     xend = prop2, yend = prog2),
+                 color =  "black", group = NA, linetype = "dashed") +
+    ggtitle( title)+
+    theme(legend.position = "none", aspect.ratio=1, plot.title = element_text(hjust = 0.5, size = 8))+
+    ylab(expression(paste(Psi, "(x)", sep = ""))) +
+    xlab(expression(paste("logit(e(x))")))
+  
+  return(plt)
+}
+
+# like prognostic match except returns data frame and match assignments, not just the
+# reformatted dataframe of outcomes by match assignment
+prognostic_match_assignment <- function(df, propensity, match_assignment, prog_model, n_control) {
+  df$m <- match_assignment
+  df$row <- 1:nrow(df)
+  n_t<- sum(df$t)
+
+  selected <- df %>% 
+    filter(!is.na(m)) %>%
+    filter(t==0) %>%
+    group_by(m) %>%
+    sample_n(size = 1)
+  
+  prognostic <- lm(y ~ . - mu - t - row - m, data = selected)
+  not_selected <- df[-selected$row, ]
+  not_selected <- not_selected %>% 
+			mutate(progscore = predict(prognostic, not_selected)) %>%
+			mutate(propscore = predict(propensity, not_selected))
+  prog_dist <- match_on(t ~ progscore + propscore, data = not_selected)
+  prog_match <- pairmatch(prog_dist, controls = n_control, data = not_selected) 
+  return(list(df = not_selected, match = prog_match, k = n_control))
+}
+```
+
+```{r}
+rho <- 0.9
+#simulate data
+df <- generate_data(N = 2000, p = 10, true_mu = "X1-10/3", rho = rho, sigma = 1)
+k = 1
+prop_model = formula(t ~ . - mu - y)
+prog_model = formula(y ~ . - mu - t)
+
+# mahalanobis match
+mahal_dist <- match_on(prop_model, method = "mahalanobis", data = df)
+m_match <- pairmatch(mahal_dist, controls = k, df)
+```
+
+```{r}
+# Build scores empirically for propensity and prognostic match
+
+# build propensity score
+propensity <- glm(prop_model, family = binomial(), data = df)
+  
+prop_match <- pairmatch(propensity, controls = k, df)
+  
+# 1:2 mahalanobis matching to select data to use for prognostic model
+mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
+  
+buff_match_assignment <- prognostic_match_assignment(df, propensity, mahal_match, prog_model, k)
+```
+
+
+```{r}
+#Calculate true propensity and prognostic score, and match on the true score
+oracle_df <- df %>% 
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = 1/(1+exp(-(mu))))
+
+oracle_prop_match <- pairmatch(t ~ prop, controls = k, oracle_df)
+oracle_prog_match <- pairmatch(t ~ prog + prop, controls = k, oracle_df)
+```
+
+Below, we imagine that we know the true propensity and prognostic scores, and we match on those for buffalo and propensity score matching.  Unsurprisingly, life is very good for buffalo matchers when the true scores are known.
+
+```{r, fig.width=8.5, fig.height= 3.5}
+a <- match_viz(df, m_match, rho, title = "Mahalanobis")
+b <- match_viz(df, oracle_prop_match, rho, title = "True Propensity")
+c <- match_viz(df, oracle_prog_match, rho, title = "True Propensity x Prognosis")
+
+grid.arrange(a,b,c, ncol= 3)
+```
+
+Now, we take the same data set and imagine that we don't know the true propensity and prognostic scores, and so must build them empirically.  For propensity score matching, we build a logistic regression of treatment assigment on all of the variables, using the entire dataset. For buffalo, we use the propensity score logistic regression in addition to a prognostic score, which we fit on a subset of the controls that are chosen to be good matches to the treated individuals based on mahalanobis distance.
+
+
+```{r, fig.width = 8.5, fig.height = 3.5}
+a <- match_viz(df, m_match, rho, title = "Mahalanobis")
+b <- match_viz(df, prop_match, rho, title = "Estimated Propensity")
+c <- match_viz(buff_match_assignment$df, buff_match_assignment$match, rho, title = "Buffalo")
+
+grid.arrange(a, b, c, ncol = 3)
+```
+
+
+We made the observation that variance actually increased with $k$ when $\rho$ was large. One explaination that we thought of was that, when $\rho$ is large, propensity and prognosis are highly correllated; As we match more and more control individuals to each individual _all_ methods are selecting matches which are more distant in prognosis and in propensity.  The propensity distance increases the bias of the estimator, while the prognosis distance increases the variance of the estimator.  In the visualization plots above, we only show 1:1 matching.
+
+I would predict that this issue is a bigger deal when $X_1$ is more strongly predictive of treatment assignment (i.e. when treatment assignment is less random and more based on covariates), since this problem is mostly an issue in the regions of limited overlap.  This would explain why we saw variance increase with $k$ when logit($e(x)) = X_1 - 10/3$, but not when logit($e(x)) = X_1/3- 4/3$.
+\pagebreak
