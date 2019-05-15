@@ -7,6 +7,8 @@ require(tidyr)
 require(sensitivitymw)
 require(tidyselect)
 require(bindrcpp)
+require(MatchIt)
+require(lme4)
 
 #' @title Generate simulated data: X, y, t, and mu
 #' @description covariate data ~ normal(0,1); mu = true_mu; 
@@ -141,6 +143,51 @@ simulate <- function(df,
   return(bind_rows(prop_df, prog_df, mahal_df))
 }
 
+#' @title simulate full match
+#' @param df, a data.frame from generate_data
+#' @param prop_model, the propensity score model
+#' @param prog_model, the prognostic score model
+#' @param ks, a vector of positive numbers indicating the number of controls to match to each treated
+#' @return a data.frame with results from propensity, mahalanobis, and buffalo matching
+simulate_fullmatch <- function(df, 
+                     prop_model = formula(t ~ . - mu - y), 
+                     prog_model = formula(y ~ . - mu - t),
+                     verbose = FALSE,
+                     ks = 1:10) {
+  
+  if(sum(df$t)*11 > nrow(df)){
+    return(data_frame())
+  }
+  
+  # propensity score full matching
+  propensity <- glm(prop_model, family = binomial(), data = df)
+  
+  prop_match <- fullmatch(propensity, data = df)
+  prop_data <- df %>% mutate(subclass = prop_match)
+  prop_df <- data_frame(method = "propensity",
+                        estimate = coef(summary(lmer(y ~ t + (1 + t|subclass), data = prop_data)))[2])
+  
+  # 1:2 mahalanobis matching to select data to use for prognostic model
+  mahal_dist <- match_on(prop_model, method = "mahalanobis", data = df)
+  mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
+  
+  # perform prognostic score full matching
+  prog_data <- prognostic_fullmatch(df, propensity, mahal_match, prog_model)
+  prog_df <- data_frame(method = "prognostic",
+                        estimate = coef(summary(lmer(y ~ t + (1 + t|subclass), data = prop_data)))[2])
+  
+  # perform mahalanobis full matching
+  m_match <- fullmatch(mahal_dist, data = df)
+  m_data <- df %>% mutate(subclass = m_match)
+  mahal_df <- data_frame(method = "mahalanobis",
+                         estimate = coef(summary(lmer(y ~ t + (1 + t|subclass), data = m_data)))[2])
+  if (verbose){
+    message("Completed One Simulation")
+  }
+  # return results for prop, prog, and mahal
+  return(bind_rows(prop_df, prog_df, mahal_df))
+}
+
 #' @title prognostic_match
 #' @param df a data.frame from generate_data()
 #' @param propensity glm object for fitted propensity score model
@@ -168,3 +215,34 @@ prognostic_match <- function(df, propensity, match_assignment, prog_model, n_con
   prog_match <- pairmatch(prog_dist, controls = n_control, data = not_selected) 
   return(reformat(not_selected, prog_match, n_control))
 }
+
+
+#' @title prognostic full match
+#' @param df a data.frame from generate_data()
+#' @param propensity glm object for fitted propensity score model
+#' @param match_assignment optmatch object with assignment from mahalanobis 1:2 matching
+#' @param prog_model formula for prognostic model
+#' @param n_control number of control individuals to match to each treated
+#' @return a data.frame of y reformatted by matching assignment according to buffalo method
+prognostic_fullmatch <- function(df, propensity, match_assignment, prog_model, n_control) {
+  df$m <- match_assignment
+  df$row <- 1:nrow(df)
+  n_t<- sum(df$t)
+  
+  selected <- df %>% 
+    filter(!is.na(m)) %>%
+    filter(t==0) %>%
+    group_by(m) %>%
+    sample_n(size = 1)
+  
+  prognostic <- lm(y ~ . - mu - t - row - m, data = selected)
+  not_selected <- df[-selected$row, ]
+  not_selected <- not_selected %>% 
+    mutate(progscore = predict(prognostic, not_selected)) %>%
+    mutate(propscore = predict(propensity, not_selected))
+  
+  prog_dist <- match_on(t ~ progscore + propscore, data = not_selected)
+  prog_match <- fullmatch(prog_dist, data = not_selected) 
+  return(not_selected %>% mutate(subclass = prog_match))
+}
+

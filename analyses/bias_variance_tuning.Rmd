@@ -183,7 +183,7 @@ ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
 Suppose we switch to the following model:
 
 \begin{align*}
-    \phi(X_i) &= X_{i1}/3 - 3,\\
+    \phi(X_i) &= X_{i1} - 10/3,\\
     \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
     \tau &= 1/2
 \end{align*}
@@ -198,7 +198,7 @@ plot_data <- sapply(0:10/10,
   data.frame() %>%
   gather(label, d, X1:X11) %>%
   mutate(rho = as.factor(rep(0:10/10, each = 50))) %>%
-  select(-label)
+  dplyr::select(-label)
 
 
 ggplot(plot_data, aes(x = rho, y = d)) + geom_boxplot() + ggtitle("Boxplot of Cohen's d")
@@ -214,7 +214,7 @@ plot_data <- sapply(0:10/10,
   data.frame() %>%
   gather(label, d, X1:X11) %>%
   mutate(rho = as.factor(rep(0:10/10, each = 50))) %>%
-  select(-label)
+  dplyr::select(-label)
 
 
 ggplot(plot_data, aes(x = rho, y = d)) + geom_boxplot() + ggtitle("Boxplot of treatment effect over pooled sd")
@@ -230,7 +230,7 @@ read_data <- function(i, path_to_file){
   return(dat)
 }
 
-dat <- lapply(1:10, function(x) read_data(x, "../data/tau_half/")) %>% bind_rows
+dat <- lapply(1:10, function(x) read_data(x, "../data/tuning/tau_half/")) %>% bind_rows
 ```
 
 ```{r}
@@ -453,7 +453,7 @@ read_data <- function(i, path_to_file){
   return(dat)
 }
 
-dat <- lapply(1:10, function(x) read_data(x, "../data/mu_x1_over_3_minus_3/")) %>% bind_rows
+dat <- lapply(1:10, function(x) read_data(x, "../data/tuning/mu_x1_over_3_minus_3/")) %>% bind_rows
 ```
 
 ```{r}
@@ -550,7 +550,7 @@ read_data <- function(i, path_to_file){
   return(dat)
 }
 
-dat <- lapply(1:10, function(x) read_data(x, "../data/psi_times_3/")) %>% bind_rows
+dat <- lapply(1:10, function(x) read_data(x, "../data/tuning/psi_times_3/")) %>% bind_rows
 ```
 
 ```{r}
@@ -626,7 +626,7 @@ read_data <- function(i, path_to_file){
   return(dat)
 }
 
-dat <- lapply(1:10, function(x) read_data(x, "../data/psi_times_6/")) %>% bind_rows
+dat <- lapply(1:10, function(x) read_data(x, "../data/tuning/psi_times_6/")) %>% bind_rows
 ```
 
 ```{r}

@@ -19,10 +19,11 @@ nsim <- as.numeric(args[3])
 # defaults
 true_mu <- "X1 - 10/3"
 sigma <- 1
-tau <- 0.5
+tau <- 10
 ks <- c(1,4,8)
+N <- 2000
 
-run_sim <- function(rho = 0.1, p = 10, nsim = 10, out_file = "test_", true_mu = true_mu, ks = 1:10, sigma = sigma, tau = tau, N = 1000) {
+run_sim <- function(rho = 0.1, p = 10, nsim = 10, out_file = "test_", true_mu = "X1 - 10/3", ks = 1:10, sigma = 1, tau = 1, N = 2000) {
   t1 <- proc.time()
   # simulate
   results <- replicate(nsim, simulate(generate_data(N=N, rho=rho, p = p, true_mu = true_mu, sigma = sigma, tau = tau),
@@ -35,9 +36,9 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10, out_file = "test_", true_mu = 
   message(paste("Rho:", rho))
   message(paste("p:",p))
   message(paste("nsim:", nsim))
-  message(paste("true_mu", true_mu))
-  message(paste("sigma", sigma))
-  message(paste("tau", tau))
+  message(paste("true_mu:", true_mu))
+  message(paste("sigma:", sigma))
+  message(paste("tau:", tau))
   
   # write to file
   if (!is.null(out_file)){
@@ -58,5 +59,5 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10, out_file = "test_", true_mu = 
 
 }
 
-run_sim(rho = rho, p = p, nsim = nsim, out_file = out_file, true_mu = true_mu, sigma = sigma, tau = tau, ks = ks, N = 1000)
+run_sim(rho = rho, p = p, nsim = nsim, out_file = out_file, true_mu = true_mu, sigma = sigma, tau = tau, ks = ks, N = N)
  

@@ -59,8 +59,8 @@ tau 0.5
 output file: angle_sigma1_results_9_10_10
 Time elapsed:
    user  system elapsed 
- 91.917   2.117  98.070 
-91.9172.11798.0700
+285.484   7.128 304.558 
+285.4847.128304.55800
 ********************
 [1] 1
 Warning messages:
