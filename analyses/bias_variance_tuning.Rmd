@@ -80,7 +80,7 @@ plot_data <- sapply(0:10/10,
   data.frame() %>%
   gather(label, d, X1:X11) %>%
   mutate(rho = as.factor(rep(0:10/10, each = 50))) %>%
-  select(-label)
+  dplyr::select(-label)
 
 
 ggplot(plot_data, aes(x = rho, y = d)) + geom_boxplot() + ggtitle("Boxplot of Cohen's d")
@@ -90,6 +90,7 @@ ggplot(plot_data, aes(x = rho, y = d)) + geom_boxplot() + ggtitle("Boxplot of Co
 A lot of the magnitude of Cohen's D above is actually caused by confounding rather than the effect of treatment; when rho is close to 1, the outcomes in the treatment and control groups appear farther apart because the covariate which determines treatment assignment also strongly determines outcome. If, instead of Cohen's D, we calculate the true causal effect divided by the pooled standard deviation of the outcome across treatment and controlled individuals, we get a different result:
 
 ```{r}
+library(dplyr)
 plot_data <- sapply(0:10/10, 
        function(x) replicate(50, cohen_d_true_tau(generate_data(N=2000, p = 10, 
                                                         true_mu = "X1-10/3", rho = x, 
@@ -97,7 +98,7 @@ plot_data <- sapply(0:10/10,
   data.frame() %>%
   gather(label, d, X1:X11) %>%
   mutate(rho = as.factor(rep(0:10/10, each = 50))) %>%
-  select(-label)
+  dplyr::select(-label)
 
 
 ggplot(plot_data, aes(x = rho, y = d)) + geom_boxplot() + ggtitle("Boxplot of treatment effect over pooled sd")
