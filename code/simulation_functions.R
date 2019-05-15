@@ -7,7 +7,6 @@ require(tidyr)
 require(sensitivitymw)
 require(tidyselect)
 require(bindrcpp)
-require(MatchIt)
 require(lme4)
 
 #' @title Generate simulated data: X, y, t, and mu
