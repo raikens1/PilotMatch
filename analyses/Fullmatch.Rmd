@@ -1,0 +1,103 @@
+---
+title: "Full Matching"
+author: "Rachael Caelie (Rocky) Aikens"
+date: "5/15/2019"
+output: html_document
+---
+
+```{r setup, warning=FALSE, message = FALSE, include = FALSE}
+knitr::opts_chunk$set(cache=TRUE, warning = FALSE, message = FALSE, echo = FALSE, fig.align = "center", fig.height = 4)
+require(ggplot2)
+require(dplyr)
+require(gridExtra)
+require(ggpubr)
+theme_set(theme_light())
+source("../code/simulation_functions.R")
+```
+
+# Set Up 
+
+We compare the performance of propensity score matching, Mahalanobis distance matching, and Buffalo Matching (described in the previous section) on simulated data, varying the dimensionality of the problem, the fixed treatment to control ratio during matching, and the correlation between the true propensity and prognostic score. The generative model for all of our simulations is the following:
+\begin{align*}
+    X_i &\sim_{iid} \text{Normal}(0,I_p),\\
+    T_i &\sim_{iid} \text{Bernoulli}\left(\frac{1}{1+\exp(-\phi(X_i))}\right),\\
+    Y_i &=\tau T_i + \Psi(X_i) + \epsilon_i,\\
+    \epsilon_i &\sim_{iid} N(0,\sigma^2),
+\end{align*}
+where the true propensity and prognositic scores are given by the linear combinations
+\begin{align*}
+    \phi(X_i) &= X_{i1}-10/3,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+so that $\text{Cor}(\phi(X_i), \Psi(X_i)) \propto \rho$.  The propensity score formula was chosen such that there were approximately 100 treated observations in each dataset. We consider $p=10$, and $\rho = 0, 0.1,\hdots, 0.9, 1.0.$. For this experiment, we used full matching rather than 1:k matching. Each simulation consisted of a dataset of size $n=2000$ and was repeated $N=2000$ times.
+We fix the treatment effect to be constant with $\tau=1/2$ and the noise to be $\sigma=1$.
+For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ using the permutation $t$-statistic from the package `sensitivtymv`
+
+# Results 
+
+Below, we use the simulation parameters described in the set up to estimate the bias, variance and mse of effect estimates produced from full matching on Mahalanobis distance, propensity score, and prognostic-by-propensity distance via buffalo.  Effect estimates (ATE) are based on the fixed effect from a linear mixed model, fit using `lme4`. We did not calculate gamma sensitivity, since this is not possible using this method.
+
+```{r}
+read_data_1000 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fullmatch/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Variance = var(estimate),
+            MSE = Bias^2 + Variance) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+```

@@ -116,6 +116,76 @@ read_data_1000 <- function(i, path_to_file){
   return(dat)
 }
 
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/archive/tuning_old_possibly_wrong/tau_half/")) %>% bind_rows
+
+#dat <- lapply(1:10, function(x) read_data_1000(x, "../data/mu_x1_minus_10_3rds/nsim_1000/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 0.5
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Variance = var(estimate),
+            MSE = Bias^2 + Variance) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+```
+
+\pagebreak
+
+```{r}
+read_data_1000 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
 dat <- lapply(1:10, function(x) read_data_1000(x, "../data/mu_x1_minus_10_3rds/nsim_1000/")) %>% bind_rows
 ```
 
@@ -173,10 +243,6 @@ d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
 
 ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
 ```
-
-\pagebreak
-
-
 
 # Playing with Tau
 
