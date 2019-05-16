@@ -20,7 +20,7 @@ nsim <- as.numeric(args[3])
 true_mu <- "X1 - 10/3"
 sigma <- 1
 tau <- 1
-ks <- c(1,4,8)
+ks <- 1:10
 N <- 2000
 
 run_sim <- function(rho = 0.1, p = 10, nsim = 10, out_file = "test_", true_mu = "X1 - 10/3", ks = 1:10, sigma = 1, tau = 1, N = 2000) {
