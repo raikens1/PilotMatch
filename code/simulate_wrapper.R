@@ -20,7 +20,7 @@ nsim <- as.numeric(args[3])
 true_mu <- "X1 - 10/3"
 sigma <- 1
 tau <- 1
-ks <- c(1,4,8)
+ks <- 1:10
 N <- 2000
 full <- T
 
