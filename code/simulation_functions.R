@@ -151,8 +151,7 @@ simulate <- function(df,
 simulate_fullmatch <- function(df, 
                      prop_model = formula(t ~ . - mu - y), 
                      prog_model = formula(y ~ . - mu - t),
-                     verbose = FALSE,
-                     ks = 1:10) {
+                     verbose = FALSE) {
   
   if(sum(df$t)*11 > nrow(df)){
     return(data_frame())
@@ -173,7 +172,7 @@ simulate_fullmatch <- function(df,
   # perform prognostic score full matching
   prog_data <- prognostic_fullmatch(df, propensity, mahal_match, prog_model)
   prog_df <- data_frame(method = "prognostic",
-                        estimate = coef(summary(lmer(y ~ t + (1 + t|subclass), data = prop_data)))[2])
+                        estimate = coef(summary(lmer(y ~ t + (1 + t|subclass), data = prog_data)))[2])
   
   # perform mahalanobis full matching
   m_match <- fullmatch(mahal_dist, data = df)
@@ -223,7 +222,7 @@ prognostic_match <- function(df, propensity, match_assignment, prog_model, n_con
 #' @param prog_model formula for prognostic model
 #' @param n_control number of control individuals to match to each treated
 #' @return a data.frame of y reformatted by matching assignment according to buffalo method
-prognostic_fullmatch <- function(df, propensity, match_assignment, prog_model, n_control) {
+prognostic_fullmatch <- function(df, propensity, match_assignment, prog_model) {
   df$m <- match_assignment
   df$row <- 1:nrow(df)
   n_t<- sum(df$t)
