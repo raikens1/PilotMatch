@@ -93,8 +93,8 @@ simulate <- function(df,
   # if not enough controls, do less than 1:k, but print an error
   if(sum(df$t)*12 > nrow(df)){
     kmax = floor(nrow(df)/sum(df$t))-2
-    ks = 1:max(10, kmax)
-    message(paste0("Insufficient controls.  Doing 1:1 to 1:", max(10, kmax), " matching instead"))
+    ks = 1:min(10, kmax)
+    message(paste0("Insufficient controls.  Doing 1:1 to 1:", min(10, kmax), " matching instead"))
   }
   
   # propensity score matching for k = 1:10
