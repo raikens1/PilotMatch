@@ -143,7 +143,7 @@ dat <- lapply(1:10, function(x) read_data_1000(x, "../data/mu_x1_minus_10_3rds/n
 ```{r}
 true_tau <- 1
 
-dat <- dat %>% mutate(
+dat <- dat %>% filter (k <= 8) %>% mutate(
               squared_err = (estimate-true_tau)**2,
               k = as.factor(k))
 
@@ -548,7 +548,7 @@ Suppose we switch to the following model:
     \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
 \end{align*}
 
-This decreases the importance of $X_1$ in determining treatment assignment, while keeping the number of treated individuals at approximately 100.  Doing this decreases bias while increasing variance.
+This decreases the importance of $X_1$ in determining treatment assignment, while keeping the number of treated individuals at approximately 100.  Doing this decreases bias while increasing variance.  I think actually these results look great for our narrative.  I'm going to use these in the paper.
 
 ```{r}
 read_data <- function(i, path_to_file){
@@ -615,7 +615,7 @@ d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
 ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
 ```
 
-This seems pretty good, and I'm running a larger batch of simulations with this set-up now.  One thing here that I'm not crazy about is that when we diminish the importance of $X_1$ in determining treatment assignment, we get closer and closer to random treatment assignment, which maybe isn't the use case that we're most interested in. Below, I've printed a histogram of $\phi$ for treated (red) and control (blue) individuals.  On the left, we see what happens when $\phi = X_1/3 - 3$, and on the right, we see what happens when $\phi = X1 - 10/3$.
+This seems pretty good, and I'm running a larger batch of simulations with this set-up now.  One thing here that I'm not crazy about is that when we diminish the importance of $X_1$ in determining treatment assignment, we get closer and closer to random treatment assignment, which maybe isn't the use case that we're most interested in. Below, I've printed a histogram of $\phi$ for treated (red) and control (blue) individuals.  On the left, we see what happen  s when $\phi = X_1/3 - 3$, and on the right, we see what happens when $\phi = X1 - 10/3$.
 
 ```{r, fig.height=3}
 overlap_histogram <- function(data, rho = 0){
@@ -629,9 +629,154 @@ overlap_histogram <- function(data, rho = 0){
 }
 
 overlap_histogram(generate_data(true_mu = "X1/3-3"))
+overlap_histogram(generate_data(true_mu = "X1/2-3"))
+overlap_histogram(generate_data(true_mu = "3*X1/4-3.2"))
 overlap_histogram(generate_data(true_mu = "X1-10/3"))
 ```
 
+
+## Phi = X1/2 - 3
+
+Suppose we switch to the following model:
+
+\begin{align*}
+    \phi(X_i) &= X_{i1}/2 - 3,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+This decreases the importance of $X_1$ in determining treatment assignment, while keeping the number of treated individuals at approximately 100.  Doing this decreases bias while increasing variance.
+
+```{r}
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/mu_X1_over_2_minus_3/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+```
+
+## Phi = 3X1/4 - 3.2
+
+Suppose we switch to the following model:
+
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3 - 3,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+This decreases the importance of $X_1$ in determining treatment assignment, while keeping the number of treated individuals at approximately 100.  Doing this decreases bias while increasing variance.  It might be a happy medium between the two propensity score formulae above
+
+```{r}
+read_data <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_10", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/3X1_over_4_minus_32/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- dat %>% filter(k <=8) %>% mutate(squared_err = (estimate-true_tau)**2, k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+```
 
 # Playing with Prognosis
 
@@ -733,6 +878,79 @@ read_data <- function(i, path_to_file){
 }
 
 dat <- lapply(1:10, function(x) read_data(x, "../data/tuning/psi_times_6/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+```
+
+
+# Control Reserve Size
+
+Here's something new: what happens when there are fewer controls?
+
+
+Suppose we switch to the following model:
+
+\begin{align*}
+    \phi(X_i) &= X_{i1} - 10/3,\\
+    \Psi(X_i) &=3\rho X_{i1} + 3\sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+Then bias and variance both increase, but variance increases more than bias.  This makes bias and variance closer to the same scale (but not quite the same).  The maximum bias can be about 10 times the maximum variance.  Also worth noting: Gamma for the buffalo goes _way_ up.
+
+```{r}
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fewer_controls/mu_x1_minus_31/")) %>% bind_rows
 ```
 
 ```{r}

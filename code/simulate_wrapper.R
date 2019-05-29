@@ -25,10 +25,22 @@ N <- 2000
 full <- T
 
 run_sim <- function(rho = 0.1, p = 10, nsim = 10,
-                    out_file = "test_", true_mu = "X1 - 10/3", 
+                    out_file = "test_", true_mu = "X1/3 - 3", 
                     ks = 1:10, sigma = 1, tau = 1, N = 2000,
                     full = FALSE) {
   t1 <- proc.time()
+  
+  message("********************")
+  message("Simulation parameters:")
+  message(paste("Rho:", rho))
+  message(paste("p:",p))
+  message(paste("nsim:", nsim))
+  message(paste("true_mu:", true_mu))
+  message(paste("sigma:", sigma))
+  message(paste("tau:", tau))
+  message(paste("full:", full))
+  message("********************")
+  
   # simulate
   if (full){
     results <- replicate(nsim, simulate_fullmatch(generate_data(N=N, rho=rho, p = p, true_mu = true_mu, sigma = sigma, tau = tau),
@@ -44,13 +56,7 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10,
   
   message("********************")
   message("Simulations complete:")
-  message(paste("Rho:", rho))
-  message(paste("p:",p))
-  message(paste("nsim:", nsim))
-  message(paste("true_mu:", true_mu))
-  message(paste("sigma:", sigma))
-  message(paste("tau:", tau))
-  message(paste("full:", full))
+  message("********************")
   
   # write to file
   if (!is.null(out_file)){

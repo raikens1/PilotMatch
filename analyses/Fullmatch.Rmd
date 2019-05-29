@@ -52,13 +52,11 @@ dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fullmatch/")) %>% bin
 true_tau <- 1
 
 dat <- mutate(dat, 
-              squared_err = (estimate-true_tau)**2,
-              k = as.factor(k))
+              squared_err = (estimate-true_tau)**2)
 
 plt_data <- dat %>% 
-  group_by(method, k, rho) %>% 
+  group_by(method, rho) %>% 
   summarize(Bias = abs(mean(estimate) - true_tau), 
-            median_gamma = median(gamma), 
             Variance = var(estimate),
             MSE = Bias^2 + Variance) %>%
   ungroup() %>%
@@ -74,30 +72,23 @@ plt_data <- plt_data %>%
 ```
 
 ```{r, fig.width=8.5, fig.height=6, echo = FALSE}
-a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+a <- ggplot(plt_data, aes(x = rho, y = Bias)) +
   geom_line() + geom_point() +
   xlab(expression(paste("Correlation, ", rho)))+
   facet_wrap(~method) +
   scale_color_brewer(palette="RdYlBu")
 
-b <- ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+b <- ggplot(plt_data, aes(x = rho, y = Variance)) +
   geom_line() + geom_point() + facet_wrap(~method) +
   xlab(expression(paste("Correlation, ", rho)))+
   scale_color_brewer(palette="RdYlBu")
 
-c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+c <- ggplot(plt_data, aes(x = rho, y = MSE)) +
   geom_line() + geom_point() + 
   xlab(expression(paste("Correlation, ", rho)))+
   facet_wrap(~method)+
   scale_color_brewer(palette="RdYlBu")
 
-d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
-  geom_line() + geom_point() +
-  ylab(expression(paste("Median ", Gamma))) +
-  xlab(expression(paste("Correlation, ", rho)))+
-  facet_wrap(~method) + 
-  scale_color_brewer(palette="RdYlBu")
-
-ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+ggarrange(a, b, c, ncol = 1, nrow = 3, common.legend = TRUE, legend = "right", labels = "AUTO")
 
 ```

@@ -27,10 +27,10 @@ We compare the performance of propensity score matching, Mahalanobis distance ma
 \end{align*}
 where the true propensity and prognositic scores are given by the linear combinations
 \begin{align*}
-    \phi(X_i) &= X_{i1}-10/3,\\
+    \phi(X_i) &= X_{i1}/3-3,\\
     \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
 \end{align*}
-so that $\text{Cor}(\phi(X_i), \Psi(X_i)) \propto \rho$.  The propensity score formula was chosen such that there were approximately 100 treated observations in each dataset. We consider $p=10$, $\rho = 0, 0.1,\hdots, 0.9, 1.0,$ and $k=1,\hdots, 10$. Each simulation consisted of a dataset of size $n=2000$ and was repeated $N=2000$ times.
+so that $\text{Cor}(\phi(X_i), \Psi(X_i)) \propto \rho$.  The propensity score formula was chosen such that there were approximately 100 treated observations in each dataset. We consider $p=10$, $\rho = 0, 0.1,\hdots, 0.9, 1.0,$ and $k=1,\hdots, 10$. Each simulation consisted of a dataset of size $n=2000$ and was repeated $N=1000$ times.
 We fix the treatment effect to be constant with $\tau=1/2$ and the noise to be $\sigma=1$.
 For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ using the permutation $t$-statistic from the package `sensitivtymv`
 
@@ -114,7 +114,7 @@ prognostic_match_assignment <- function(df, propensity, match_assignment, prog_m
 ```{r}
 rho <- 0
 #simulate data
-df <- generate_data(N = 2000, p = 10, true_mu = "X1-10/3", rho = rho, sigma = 1)
+df <- generate_data(N = 2000, p = 10, true_mu = "X1/3-3", rho = rho, sigma = 1)
 k = 1
 prop_model = formula(t ~ . - mu - y)
 prog_model = formula(y ~ . - mu - t)
@@ -122,21 +122,6 @@ prog_model = formula(y ~ . - mu - t)
 # mahalanobis match
 mahal_dist <- match_on(prop_model, method = "mahalanobis", data = df)
 m_match <- pairmatch(mahal_dist, controls = k, df)
-```
-
-
-```{r}
-# Build scores empirically for propensity and prognostic match
-
-# build propensity score
-propensity <- glm(prop_model, family = binomial(), data = df)
-  
-prop_match <- pairmatch(propensity, controls = k, df)
-  
-# 1:2 mahalanobis matching to select data to use for prognostic model
-mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
-  
-buff_match_assignment <- prognostic_match_assignment(df, propensity, mahal_match, prog_model, k)
 ```
 
 
@@ -176,14 +161,11 @@ read_data_1000 <- function(i, path_to_file){
   return(dat)
 }
 
-dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tau_half/")) %>% bind_rows
-#dat2 <- lapply(1:10, function(x) read_data_1000(x, "../data/tau_half/")) %>% bind_rows
-
-#dat <- rbind(dat1, dat2)
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/mu_x1_over_3_minus_3/nsim_1000/")) %>% bind_rows
 ```
 
 ```{r}
-true_tau <- 0.5
+true_tau <- 1
 
 dat <- mutate(dat, 
               squared_err = (estimate-true_tau)**2,
@@ -193,8 +175,8 @@ plt_data <- dat %>%
   group_by(method, k, rho) %>% 
   summarize(Bias = abs(mean(estimate) - true_tau), 
             median_gamma = median(gamma), 
-            Variance = var(estimate),
-            MSE = Bias^2 + Variance) %>%
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
   ungroup() %>%
   mutate(method = recode(method, propensity = "Propensity", 
                          mahalanobis = "Mahalanobis", 
@@ -214,7 +196,7 @@ a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
   facet_wrap(~method) +
   scale_color_brewer(palette="RdYlBu")
 
-b <- ggplot(plt_data, aes(x = rho, y = Variance, group = k, color = k)) +
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
   geom_line() + geom_point() + facet_wrap(~method) +
   xlab(expression(paste("Correlation, ", rho)))+
   scale_color_brewer(palette="RdYlBu")
@@ -237,9 +219,9 @@ ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labe
 ```
 
 ```{r fig.width=8.5, fig.height=6, echo = FALSE}
-pdf("../figures/Figure2.pdf",  width=8.5, height=3.5)
-ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
-dev.off()
+p <- ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+ggsave("../figures/Figure2.pdf", p,  width=8.5, height=5.5)
 ```
 
 Figure 1 shows the bias and variance of $1:k$ matching for each method on the same simulated data set as $k$ increases (colored lines) and the correllation of propensity and prognosis, $\rho$ increases from left to right.  When $\rho = 0$, the treatment effect is completely unconfounded, since treatment is entirely determined (up to randomness) by variation in $X_{i1}$, and outcome (under the control assignment) is entirely determined by variation in $X_{i2}$.  When $\rho = 1$, the data is highly confounded, since outcome and treatment assignment are both determined solely by variation in $X_{i1}$. 
@@ -253,9 +235,9 @@ ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labe
 ```
 
 ```{r fig.width=8.5, fig.height=6, echo = FALSE}
-pdf("../figures/Figure3.pdf",  width=8.5, height=3.5)
-ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
-dev.off()
+p <- ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+ggsave("../figures/Figure3.pdf", p,  width=8.5, height=5.5)
 ```
 
 Figure 2 shows the mean squared error and median gamma sensitivity from the same set of simulations as above.  Figure 2A demonstrates that Buffalo does well compared to the other two methods in terms of mean squared error, because of the protection against bias and variance shown in figure 1. Figure 2B shows the protective effect of prognostic balance against unobserved confounding.  Propensity score matching gives lowest $\Gamma$ values, especially when $\rho$ is small. When this happens, the propensity score contains no prognostically relevant covariates, so the matches produced have poor prognostic balance.  As $\rho$ increases, the prognostic score and the propensity score become highly correllated, so matching on propensity score starts to give some prognostic balance as well as propensity balance.  While the Gamma sentistivity of Mahalanobis distance matching seems promising when $\rho$ is large, most of this is likely due to the large amount of bias in the effect estimate from this method (Figure 1A).  Because Buffalo matching directly attempts to achieve prognostic balance in the matched sets, the Buffalo method has better protection against unobserved confounding, without giving a highly biased estimator.
