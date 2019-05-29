@@ -32,6 +32,7 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10,
   
   message("********************")
   message("Simulation parameters:")
+  message(paste("N:", N))
   message(paste("Rho:", rho))
   message(paste("p:",p))
   message(paste("nsim:", nsim))
