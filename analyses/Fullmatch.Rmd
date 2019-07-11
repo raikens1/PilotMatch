@@ -45,7 +45,7 @@ read_data_1000 <- function(i, path_to_file){
   return(dat)
 }
 
-dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fullmatch/")) %>% bind_rows
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fullmatch/N_2000/")) %>% bind_rows
 ```
 
 ```{r}
@@ -68,7 +68,8 @@ plt_data <- dat %>%
 
 ```{r, echo = FALSE}
 plt_data <- plt_data %>%
-  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo"))) %>%
+  filter(method != "Mahalanobis")
 ```
 
 ```{r, fig.width=8.5, fig.height=6, echo = FALSE}

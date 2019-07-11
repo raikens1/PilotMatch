@@ -943,11 +943,9 @@ Here's something new: what happens when there are fewer controls?
 Suppose we switch to the following model:
 
 \begin{align*}
-    \phi(X_i) &= X_{i1} - 10/3,\\
-    \Psi(X_i) &=3\rho X_{i1} + 3\sqrt{(1-\rho^2)}X_{i2},
+    \phi(X_i) &= X_{i1} - 3.1,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
 \end{align*}
-
-Then bias and variance both increase, but variance increases more than bias.  This makes bias and variance closer to the same scale (but not quite the same).  The maximum bias can be about 10 times the maximum variance.  Also worth noting: Gamma for the buffalo goes _way_ up.
 
 ```{r}
 dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fewer_controls/mu_x1_minus_31/")) %>% bind_rows

@@ -8,10 +8,11 @@ output: pdf_document
 
 ```{r setup, warning=FALSE, message = FALSE, include = FALSE}
 knitr::opts_chunk$set(cache=TRUE, warning = FALSE, message = FALSE, echo = FALSE, fig.align = "center", fig.height = 4)
-require(ggplot2)
 require(dplyr)
+require(ggplot2)
 require(gridExtra)
 require(ggpubr)
+require(knitr)
 theme_set(theme_light())
 source("../code/simulation_functions.R")
 ```
@@ -50,17 +51,17 @@ match_viz <- function(data, match, rho, k = 1, title = "Matching"){
     mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
            prop = mu,
            t = as.factor(abs(1-t))) %>%
-    select(c(t, prog, prop, m, a))
+    dplyr::select(c(t, prog, prop, m, a))
   
   m_data <- plt_data %>% 
     filter(!is.na(m)) %>%
     arrange(m, desc(t)) %>% 
     mutate(id = rep(1:(k + 1), sum(data$t))) %>%
-    select(-c(t, a)) %>%
+    dplyr::select(-c(t, a)) %>%
     group_by(m) %>%
     summarize(prop1 = first(prop), prop2 = last(prop),
               prog1 = first(prog), prog2 = last(prog)) %>%
-    select(prog1, prog2, prop1, prop2)
+    dplyr::select(prog1, prog2, prop1, prop2)
   
   plt <- ggplot(data = plt_data, aes( x = prop, y = prog, group = t, color = t)) + 
     geom_point(aes(alpha = a))+
@@ -82,7 +83,7 @@ overlap_histogram <- function(data){
       mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
            prop = mu,
            t = as.factor(abs(1-t))) %>%
-      select(c(t, prog, prop))
+      dplyr::select(c(t, prog, prop))
     
     ggplot(plt_data, aes(x = prop, fill = t)) + geom_histogram(alpha = 0.4, position = "identity")
 }
@@ -143,13 +144,15 @@ c <- match_viz(df, oracle_prog_match, rho, title = "True Propensity x Prognosis 
 ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
 ```
 
-```{r save to Figures folder}
+```{r}
 pdf("../figures/Figure1.pdf",  width=8.5, height=3.5)
 ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
 dev.off()
 ```
 
-# Results 
+# 5 Results 
+
+## 5.1 Buffalo Performance with a large control reserve
 
 Below, we use the simulation parameters described in the set up to estimate the bias, variance, mse, and median gamma sensitivity of effect estimates produced from Mahalanobis distance matching, propensity score matching, and Buffalo matching.
 
@@ -184,12 +187,12 @@ plt_data <- dat %>%
 ```
 
 
-```{r, echo = FALSE}
+```{r}
 plt_data <- plt_data %>%
   mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
 ```
 
-```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+```{r, fig.width=8.5, fig.height=6}
 a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
   geom_line() + geom_point() +
   xlab(expression(paste("Correlation, ", rho)))+
@@ -243,3 +246,225 @@ ggsave("../figures/Figure3.pdf", p,  width=8.5, height=5.5)
 Figure 2 shows the mean squared error and median gamma sensitivity from the same set of simulations as above.  Figure 2A demonstrates that Buffalo does well compared to the other two methods in terms of mean squared error, because of the protection against bias and variance shown in figure 1. Figure 2B shows the protective effect of prognostic balance against unobserved confounding.  Propensity score matching gives lowest $\Gamma$ values, especially when $\rho$ is small. When this happens, the propensity score contains no prognostically relevant covariates, so the matches produced have poor prognostic balance.  As $\rho$ increases, the prognostic score and the propensity score become highly correllated, so matching on propensity score starts to give some prognostic balance as well as propensity balance.  While the Gamma sentistivity of Mahalanobis distance matching seems promising when $\rho$ is large, most of this is likely due to the large amount of bias in the effect estimate from this method (Figure 1A).  Because Buffalo matching directly attempts to achieve prognostic balance in the matched sets, the Buffalo method has better protection against unobserved confounding, without giving a highly biased estimator.
 
 
+## 5.2 Methodological Considerations
+
+In the previous section, we illustrated a use case in which Buffalo Matching is very useful: There is an abundance of control individuals which overlap fairly well with the treated population, and the underlying processes dictating propensity and prognosis are easily fit with standard linear models.  In this section, we consider four design considerations which are important to the selection of the method: 
+
+(1) Correlation of treatment and prognosis (confoundedness)
+(2) Tradeoffs in sample size
+(3) Tradeoffs in match quality
+(4) Fitting the propensity and prognostic models
+
+### 5.2.1 Correlation of treatment and prognosis
+
+A first consideration is the confoundedness of the problem, modeled here as the correlation, $\rho$, between $\phi(X_i)$ and $\Psi(X_i)$. Figures 2 and 3 show the performance of each matching method as $\rho$, varies from 0 to 1.  When this correllation is close to one, only the covariate $X_{i1}$ is important for treatment assignment ($\phi(X_i)$) and potential outcome under the control assignment ($\Psi(X_i)$). When this happens, all methods unsurprisingly have their greatest levels of bias (Figure 2A).  Mahalanobis distance matching suffers the worst from this phenomemon because it is matching on several covariates which are unimportant to either treatment assignment or outcome.
+
+One result worth remarking on is that propensity score matching is lowest variance when confoundedness is worse.  This is because, when propensity and prognosis are highly correllated, matching on the covariates most important for treatment assignment also imposes balance in the covariate most important for prognosis. This imposes prognostic balance, protecting against the variance (Figure 2B) and increasing robustness to confounding (Figure 3B).
+
+In contrast, when treatment assignment is less closely correlated with potential outcome, propensity score matching suffers most from issues of high variance in the effect estimate (Figure 2B), because ideal propensity score matches may be quite distant in terms of the covariates most important to outcome (Figure 1B).  These are the scenarios in which buffalo matching is most protective against variance in estimation, since it imposes prognostic balance on the matched sets as well as propensity balance.
+
+### 5.2.2 Tradeoff in sample size
+
+A second consideration is the tradeoff in control sample size implicit in creating a held-aside set for fitting the prognostic score prior to matching.  In the Buffalo Algorithm, one control individual for each treated observation is removed from the analysis data set for the purpose of fitting the prognostic score, amounting to a sacrifice of $\sim 100$ observations. 
+
+Section 5.2.3 considers the effect of this sacrifice on the quality of the available matches, and the influence that this has on the bias of the estimator. For the moment, let us consider the effect of this sacricice on the variance of the estimator, since removing this hold-out set means fewer control individuals may be matched to each treated individual (smaller $k$ in $1:k$ matching). Generally speaking, the central limit theorem implies that the variance of an estimator tends to decrease with $\frac{1}{n}$, where $n$ is the sample size.  This means that decreasing the sample size by $\sim 100$ is likely to have a very large effect on variance when the original sample size is small, and a relatively small effect when the original sample size is much larger than 100. Thus, when the control reserve is much larger in size than the held aside sample, the loss of those observations from the analysis phase will have a small effect on sample variance.
+
+Meanwhile, inducing prognostic balance in the analysis set has a variance-reducing effect for equivalent sample sizes (Figure 2B). This means that when the control reserve is very large (say, greater than 1500), it may in fact be variance-*reducing* to "sacrifice" some individuals from the analysis set so that the overall matched sets obtained in the analysis phase have better prognostic balance.  This trade-off, of course, depends on the total size of the control reserve.  In order to illustrate this, we simulated fullmatching on Mahalanobis Distance, Propensity score, and Buffalo Matching.  Since fullmatch uses all of the treated and control individuals, the Buffalo fullmatch has ~100 fewer control individuals to use for estimation than the alternative methods.  However, when the control reserve is large, the variance of the estimator from Buffalo fullmatching is actually smaller than that for the other methods (Figure 4).
+
+```{r}
+read_data_1000 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat1 <- lapply(1:10, function(x) read_data_1000(x, "../data/fullmatch/N_2000/")) %>% bind_rows
+dat2 <- lapply(1:10, function(x) read_data_1000(x, "../data/fullmatch/N_2000/Extra_run/")) %>% bind_rows
+
+dat <- rbind(dat1, dat2)
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2)
+
+plt_data <- dat %>% 
+  group_by(method, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            Variance = var(estimate),
+            MSE = Bias^2 + Variance) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+
+```{r, fig.width=8, fig.height = 2.5}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = method, color = method)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  theme(legend.title=element_blank())+
+  scale_color_brewer(palette="Set1")
+
+b <- ggplot(plt_data, aes(x = rho, y = Variance,  group = method, color = method)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  theme(legend.title=element_blank())+
+  scale_color_brewer(palette="Set1")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = method, color = method)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  theme(legend.title=element_blank())+
+  scale_color_brewer(palette="Set1")
+
+ggarrange(a, b, c, ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom", labels = "AUTO")
+```
+
+```{r fig.width=8.5, fig.height=6, echo = FALSE}
+p <- ggarrange(a,b,c, ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom", labels = "AUTO")
+
+ggsave("../figures/Figure4.pdf", p,  width=8.5, height=2.5)
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+plt_data <- plt_data  %>%
+  filter(method != "Mahalanobis")
+
+a <- ggplot(plt_data, aes(x = rho, y = Bias)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Variance)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, c, ncol = 1, nrow = 3, common.legend = TRUE, legend = "right", labels = "AUTO")
+```
+
+### 5.2.3 Tradeoff in match quality
+
+As opposed to the variance-reducing effect discussed above, Buffalo Matching does tend to have the effect of *increasing* bias because of the loss of individuals from the control reserve which might otherwise have been effective matches. In essence, some of the held-aside control individuals used to build the prognostic score may actually have been potential high-quality matches to the treated individuals. This can force the subsequent matching to compromise on lower quality matches, increasing bias and - in some cases - variance (see supplement).  This effect is most pronounced when (1) k is large, (2) the control reserve is small, and (2) overlap of the treated and control individuals is poor (Figure 2A, Figure 5A). When $k$ is large, bias for all methods is worse because lower and lower quality matches are being carried over to the analysis phase.  If the control reserve is small and/or there is little overlap between the treated and control individuals, every control individual which is close in covariate space to the treated individuals is a precious potential match, and sacrificing these individuals means that there are fewer good alternatives to choose from.  Additionally, we find that poor overlap combined with high confoundedness (large $\rho$) tends to increase the variance of the estimator for both Buffalo and propensity score matching (see Supplement).  We hypothesize that this is because both methods are forced to chose matches which are more distant both in propensity and prognostic score.  In particular, this prognostic imbalance induces increased variance in estimation.
+
+As a result, we advise the following.  First, the number, $k$, of treated individuals to be matched to each control individual, should always be chosen with the size of the control reserve and the overlap of treated and control observations, regardless of the particular matching distance specification used. When overlap is poor and the number of control individuals is sparse, increasing $k$ will increase the bias of all methods considered here.  Second, the selection of the control individuals for the held-out set is a nuanced design decision (discussed further in the discussion section). Just as with the selection of $k$, the choice to use Buffalo Matching and the selection of the held-out set should depend on the data. Because of the sacrifice in match quality associated with discarding some individuals, Buffalo Matching is most appropriate when the control reserve is plentiful, particularly in the region of overlap between treated and control individuals.  
+
+One potential simplification of this issue is to use fullmatch rather than 1:k matching, since fullmatch deals elegantly with the problem of the ratios of treated and control individuals varying across the covariate space.  Figure 5 shows the results of fullmatching using Mahalanobis distance, propensity score, and Buffalo.
+
+
+```{r}
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fewer_controls/mu_x1_over_3_minus_275/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+```
+
+```{r fig.width=8.5, fig.height=6, echo = FALSE}
+p <- ggarrange(a,b,c, ncol = 1, nrow = 3, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+ggsave("../figures/Figure5.pdf", p,  width=8.5, height=7)
+```
+
+
+### 5.2.4 Fitting propensity and prognostic models
+
+A final consideration is that of fitting the propensity and prognostic models themselves.  This simulation was largely a proof of concept, with the true data generating processes for treatment assigment and prognosis fairly simple and easily fit by common linear modeling methodologies.  In practice, the researcher may choose to draw from whatever model fitting methodologies they prefer to capture the prognostic score.
+
+It is intuitive that the value of buffalo matching is greatest when the propensity and prognostic score models are most accurate.  In contrast to figure 1, which shows the idealized matchings that would be selected if the propensity and prognostic scores were precisely known, figure 6 displays the matches which might be selected in practice.  Both propensity and buffalo matching methods rely on the assumption that the prognosis and propensity for treatment are easy to estimate; in cases where the model is imperfect, imperfect matches may be selected.  In fact, in simulations where more random variation is added to the outcome, we find that the performance of buffalo is diminished because the prognostic score is harder to fit (Supplement).  In cases like these, it may be useful to budget more data for fitting the prognostic score (if able), or use more sophisticated modeling techniques.  In cases where the control reserve is practically infinitely abundant, this may be an opportunity to leverage more data for the purposes of building a very accurate model for prognosis to be used in matching.
+
+```{r}
+# Build scores empirically for propensity and prognostic match
+
+# build propensity score
+propensity <- glm(prop_model, family = binomial(), data = df)
+  
+prop_match <- pairmatch(propensity, controls = k, df)
+  
+# 1:2 mahalanobis matching to select data to use for prognostic model
+mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
+  
+buff_match_assignment <- prognostic_match_assignment(df, propensity, mahal_match, prog_model, k)
+```
+
+```{r, fig.width=8.5, fig.height= 3.5}
+a <- match_viz(df, m_match, rho, title = "Mahalanobis Match")
+b <- match_viz(df, prop_match, rho, title = "True Propensity Match")
+c <- match_viz(buff_match_assignment$df, buff_match_assignment$match, rho, title = "True Propensity x Prognosis Match")
+
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+```
+
+```{r}
+pdf("../figures/Figure6.pdf",  width=8.5, height=3.5)
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+dev.off()
+```

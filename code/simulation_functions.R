@@ -192,8 +192,9 @@ simulate_fullmatch <- function(df,
 #' @param match_assignment optmatch object with assignment from mahalanobis 1:2 matching
 #' @param prog_model formula for prognostic model
 #' @param n_control number of control individuals to match to each treated
+#' @param params_only (boolean) if TRUE, return not_selected and match object, rather than reformatted data frame
 #' @return a data.frame of y reformatted by matching assignment according to buffalo method
-prognostic_match <- function(df, propensity, match_assignment, prog_model, n_control) {
+prognostic_match <- function(df, propensity, match_assignment, prog_model, n_control, params_only = FALSE) {
   df$m <- match_assignment
   df$row <- 1:nrow(df)
   n_t<- sum(df$t)
@@ -211,7 +212,11 @@ prognostic_match <- function(df, propensity, match_assignment, prog_model, n_con
 			mutate(propscore = predict(propensity, not_selected))
   prog_dist <- match_on(t ~ progscore + propscore, data = not_selected)
   prog_match <- pairmatch(prog_dist, controls = n_control, data = not_selected) 
-  return(reformat(not_selected, prog_match, n_control))
+  
+  if(params_only){
+    return(list(df = not_selected, prog_match = prog_match))
+  } else{
+  return(reformat(not_selected, prog_match, n_control))}
 }
 
 
@@ -221,8 +226,9 @@ prognostic_match <- function(df, propensity, match_assignment, prog_model, n_con
 #' @param match_assignment optmatch object with assignment from mahalanobis 1:2 matching
 #' @param prog_model formula for prognostic model
 #' @param n_control number of control individuals to match to each treated
+#' @param params_only (boolean) if TRUE, return not_selected and match object, rather than reformatted data frame
 #' @return a data.frame of y reformatted by matching assignment according to buffalo method
-prognostic_fullmatch <- function(df, propensity, match_assignment, prog_model) {
+prognostic_fullmatch <- function(df, propensity, match_assignment, prog_model, params_only = FALSE) {
   df$m <- match_assignment
   df$row <- 1:nrow(df)
   n_t<- sum(df$t)
@@ -241,9 +247,13 @@ prognostic_fullmatch <- function(df, propensity, match_assignment, prog_model) {
   
   prog_dist <- match_on(t ~ progscore + propscore, data = not_selected)
   prog_match <- fullmatch(prog_dist, data = not_selected) 
-  return(not_selected %>% mutate(subclass = as.character(prog_match)))
+  
+  
+  if(params_only){
+    return(list(df = not_selected, prog_match = prog_match))
+  } else{
+  return(not_selected %>% mutate(subclass = as.character(prog_match)))}
 }
-
 
 #' @title Fullmatch effect estimate
 #' @description returns effect estimate from fullmatch using sensitivityfull
@@ -295,4 +305,68 @@ fullmatch_reformat <- function(sub_df, J){
   }
   
   return(new_df)
+}
+
+#' @title Simulate for distances
+#' @description perform matchings like simulate, but with fixed k, and return distances between matches
+#'  rather than effect estimate and gamma 
+#' @param df, a data.frame from generate_data
+#' @param prop_model, the propensity score model
+#' @param prog_model, the prognostic score model
+#' @param k, the number of controls to match to each treated
+#' @return a data.frame with results from propensity, mahalanobis, and buffalo matching
+simulate_for_distances <- function(df, 
+                                   prop_model = formula(t ~ . - mu - y), 
+                                   prog_model = formula(y ~ . - mu - t),
+                                   verbose = FALSE,
+                                   k = 3,
+                                   true_rho = 0){
+  # if not enough controls, do less than 1:k, but print an error
+  if(sum(df$t)*5 > nrow(df)){
+    kmax = floor(nrow(df)/sum(df$t))-2
+    k = min(k, kmax)
+    message(paste0("Insufficient controls.  Doing 1:", k, " matching instead"))
+  }
+  
+  # propensity score matching for k = 1:10
+  propensity <- glm(prop_model, family = binomial(), data = df)
+  
+  prop_match <- pairmatch(propensity, controls = k, df)
+  prop_df <- data_frame(method = "propensity",
+                        k = k,
+                        mean_dist = mean_dist(df, prop_match, true_rho))
+  
+  # 1:2 mahalanobis matching to select data to use for prognostic model
+  mahal_dist <- match_on(prop_model, method = "mahalanobis", data = df)
+  mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
+  
+  # perform prognostic score matching for k
+  prog_list <- prognostic_match(df, propensity, mahal_match, prog_model, k, params_only = TRUE)
+  prog_df <- data_frame(method = "prognostic",
+                        k = k,
+                        mean_dist = mean_dist(prog_list$df, prog_list$prog_match, true_rho))
+  
+  # mahalanobis matching for k
+  m_match <- pairmatch(mahal_dist, controls = k, df)
+  mahal_df <- data_frame(method = "mahalanobis",
+                         k = k,
+                         mean_dist = mean_dist(df, m_match, true_rho))
+  if (verbose){
+    message("Completed One Simulation")
+  }
+  # return results for prop, prog, and mahal
+  return(bind_rows(prop_df, prog_df, mahal_df))
+}
+
+#' @title Get Distances
+#' @description Return the mean mahalanobis distance between matched t and c individuals
+#' @param df data.frame of all individuals
+#' @param match the result of a call to fullmatch or pairmatch
+#' @param true_rho (float) the true value of rho
+#' @return (float) mean mahalanobis distance between matched t and c individuals from match
+mean_dist <- function(df, match, true_rho){
+  df <- df %>% mutate( psi = true_rho*X1 + sqrt(1-true_rho^2)*X2) 
+  dists <- match_on(t ~ psi + mu, data = df)
+  dist_list <- matched.distances(match, dists)
+  return(mean(unlist(dist_list)))
 }
