@@ -15,7 +15,10 @@ p = 10
 
 ## Varying sample size
 
-When N = 2000, true_mu = "X1/3 - 3" (default)
-When N = 1600, true_mu = "X1/3 - 2.75"
-When N = 1100, true_mu = "X1/3 - 2.35"
-When N = 1000, true_mu = "X1/3 - 2.25"
+ N       mu
+ 2000    "X1/3 - 3"
+ 1800    "X1/3 - 2.9"
+ 1600    "X1/3 - 2.75"
+ 1400    "X1/3 - 2.6"
+ 1200    "X1/3 - 2.45"
+ 1000    "X1/3 - 2.25"

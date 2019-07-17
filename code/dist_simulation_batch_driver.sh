@@ -2,8 +2,7 @@
 
 NSIM=$1
 
-for i in {5...5}; do
-  RHO=$(echo "scale = 1; ${i}/10" | bc);
+for i in 2000 1800 1600 1400 1200 1000; do
   DATE=`date +%Y-%m-%d`
-  nohup Rscript ../code/simulate_distances_wrapper.R ${RHO} 10 ${NSIM} >> ${i}_sim_${DATE}.log &
+  nohup Rscript ../code/simulate_distances_wrapper.R 0.5 ${i} ${NSIM} >> ${i}_dist_sim_${DATE}.log &
  done

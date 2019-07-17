@@ -7,13 +7,17 @@ source("simulation_functions.R")
 
 out_file <- "dist_results_"
 
-# get user arguements
-args <- commandArgs(trailingOnly=TRUE)
+# Parameters N and mu for different N
+# N       mu
+# 2000    "X1/3 - 3"
+# 1800    "X1/3 - 2.9"
+# 1600    "X1/3 - 2.75"
+# 1400    "X1/3 - 2.6"
+# 1200    "X1/3 - 2.45"
+# 1000    "X1/3 - 2.25"
 
-# parse args
-rho <- as.numeric(args[1])
-p <- as.numeric(args[2])
-nsim <- as.numeric(args[3])
+Ns <- c(2000, 1800, 1600, 1400, 1200, 1000)
+mus <- c("X1/3 - 3", "X1/3 - 2.9", "X1/3 - 2.75", "X1/3 - 2.6", "X1/3 - 2.45", "X1/3 - 2.25")
 
 # defaults
 true_mu <- "X1/3 - 3"
@@ -22,6 +26,16 @@ tau <- 1
 k <- 3
 N <- 2000
 full <- F
+p <- 10
+
+# get user arguements
+args <- commandArgs(trailingOnly=TRUE)
+
+# parse args
+rho <- as.numeric(args[1])
+N <- as.numeric(args[2])
+nsim <- as.numeric(args[3])
+true_mu <- mus[which(Ns == N)]
 
 run_sim <- function(rho = 0.1, p = 10, nsim = 10,
                     out_file = "test_", true_mu = "X1/3 - 3", 
@@ -58,8 +72,8 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10,
   
   # write to file
   if (!is.null(out_file)){
-    write.csv(results, file = paste0(out_file, rho*10, "_", p, "_", nsim), row.names = FALSE)
-    message(paste("output file:", paste0(out_file, rho*10, "_", p, "_", nsim)))
+    write.csv(results, file = paste0(out_file, rho*10, "_", N, "_", nsim), row.names = FALSE)
+    message(paste("output file:", paste0(out_file, rho*10, "_", N, "_", nsim)))
   } else {
     message("Results not saved to file.")
   }
@@ -80,3 +94,4 @@ run_sim(rho = rho, p = p, nsim = nsim,
         sigma = sigma, tau = tau, k = k, N = N,
         full = full)
 
+print(true_mu)

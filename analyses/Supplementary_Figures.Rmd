@@ -15,11 +15,11 @@ theme_set(theme_light())
 source("../code/simulation_functions.R")
 ```
 
-# Supplementary Figures 1 and 2: Motivating visualization when prognosis and treatment are highly corellated.
+# To do
 
-We made the observation that variance actually increased with $k$ when $\rho$ was large. One explaination that we thought of was that, when $\rho$ is large, propensity and prognosis are highly correllated; As we match more and more control individuals to each individual _all_ methods are selecting matches which are more distant in prognosis and in propensity.  The propensity distance increases the bias of the estimator, while the prognosis distance increases the variance of the estimator.  In the visualization plots above, we only show 1:1 matching.  This problem is likely to worsen as $k$ increases, explaining an increase in both bias and variance as $k$ increases.
+- [ ] Supplementary figure 3 (p = 50)
 
-I would predict that this issue is a bigger deal when $X_1$ is more strongly predictive of treatment assignment (i.e. when treatment assignment is less random and more based on covariates), since this problem is mostly an issue in the regions of limited overlap.  This would explain why we saw variance increase with $k$ when logit($e(x)) = X_1 - 10/3$, but not when logit($e(x)) = X_1/3- 4/3$.
+# Supplementary Figure 1
 
 ```{r}
 match_viz <- function(data, match, rho, k = 1, title = "Matching"){
@@ -137,7 +137,9 @@ c <- match_viz(df, oracle_prog_match, rho, title = "True Propensity x Prognosis"
 ggarrange(a,b,c, ncol= 3, labels = "AUTO")
 ```
 
-Now, we take the same data set and imagine that we don't know the true propensity and prognostic scores, and so must build them empirically.  For propensity score matching, we build a logistic regression of treatment assigment on all of the variables, using the entire dataset. For buffalo, we use the propensity score logistic regression in addition to a prognostic score, which we fit on a subset of the controls that are chosen to be good matches to the treated individuals based on mahalanobis distance.
+**Supplementary Figure 1:** Replication of Figure 1 with $\rho = 0.9$.  This simulates the case that propensity and prognosis are highly correllated. When this occurs, matching on propensity will also achieve some prognostic balance, and vise-versa. All simulation parameters are as described in section 2.1.
+
+# Supplementary Figure 2
 
 
 ```{r, fig.width = 8.5, fig.height = 3.5}
@@ -147,11 +149,123 @@ c <- match_viz(buff_match_assignment$df, buff_match_assignment$match, rho, title
 
 ggarrange(a, b, c, ncol = 3, labels = "AUTO")
 ```
+**Supplementary Figure 1:** Replication of Figure 2 with $\rho = 0.9$.  All simulation parameters are as described in section 2.1.
+
 
 # Supplementary Figure 3
+
+```{r}
+read_data_1000 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+```
+
 
 Bias and MSE for MDM, propensity, and prognostic score matching when p = 50.
 
 To do
 
-# 
+# Supplementary Figure 4
+
+```{r}
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/mu_x1_minus_10_3rds/nsim_1000/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- dat %>% mutate(
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>%
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=3, echo = FALSE}
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation , group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+b
+```
+
+**Supplementary Figure 4** Standard deviation from matching estimators when overlap between treated and control individuals is poor.  Simulations were carried out as described in Section 4.1, but with $\phi(X_i) = X_{i1} - 10/3$.  This kept the sample size and number of treated individuals constant while increasing the separation of treated and control individuals.
+
+
+# Supplementary Figure 5
+
+```{r}
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/sigma_2/nsim_1000/")) %>% bind_rows()
+```
+
+```{r}
+true_tau <- 1
+
+dat <- dat %>% mutate(
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>%
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=6, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+```
+
+**Supplementary Figure 5** MSE and median gamma design sensitivity when the random noise contributing to the outcome is increased.  All simulation parameters are the same as described in Section 4.1, except that $\sigma = 2$ This increases the difficulty of fitting the prognostic score, diminishing the performance of Buffalo matching in terms of MSE and sensitivity.

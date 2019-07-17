@@ -28,12 +28,12 @@ We compare the performance of propensity score matching, Mahalanobis distance ma
 \end{align*}
 where the true propensity and prognositic scores are given by the linear combinations
 \begin{align*}
-    \phi(X_i) &= X_{i1}/3-3,\\
+    \phi(X_i) &= X_{i1}/3-c,\\
     \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
 \end{align*}
-so that $\text{Cor}(\phi(X_i), \Psi(X_i)) \propto \rho$.  The propensity score formula was chosen such that there were approximately 100 treated observations in each dataset. We consider $p=10$, $\rho = 0, 0.1,\hdots, 0.9, 1.0,$ and $k=1,\hdots, 10$. Each simulation consisted of a dataset of size $n=2000$ and was repeated $N=1000$ times.
-We fix the treatment effect to be constant with $\tau=1/2$ and the noise to be $\sigma=1$.
-For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ using the permutation $t$-statistic from the package `sensitivtymv`
+so that $\text{Cor}(\phi(X_i), \Psi(X_i)) \propto \rho$.  The constant, $c$, in the propensity score formula was chosen such that there were approximately 100 treated observations in each dataset. We consider $p=10$, $\rho = 0, 0.1,\hdots, 0.9, 1.0,$ and $k=1,\hdots, 10$. Each simulation consisted of a dataset of size $n=2000$ and was repeated $N=1000$ times.
+We fix the treatment effect to be constant with $\tau=1$ and the noise to be $\sigma=1$.
+For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ using the permutation $t$-statistic from the package `sensitivtymv`.
 
 \pagebreak
 
@@ -251,8 +251,11 @@ Figure 2 shows the mean squared error and median gamma sensitivity from the same
 In the previous section, we illustrated a use case in which Buffalo Matching is very useful: There is an abundance of control individuals which overlap fairly well with the treated population, and the underlying processes dictating propensity and prognosis are easily fit with standard linear models.  In this section, we consider four design considerations which are important to the selection of the method: 
 
 (1) Correlation of treatment and prognosis (confoundedness)
+
 (2) Tradeoffs in sample size
+
 (3) Tradeoffs in match quality
+
 (4) Fitting the propensity and prognostic models
 
 ### 5.2.1 Correlation of treatment and prognosis
