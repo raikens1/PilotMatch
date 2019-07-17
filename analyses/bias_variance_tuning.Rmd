@@ -14,7 +14,7 @@ require(dplyr)
 require(gridExtra)
 require(ggpubr)
 theme_set(theme_light())
-source("../code/simulation_functions.R")
+source("../code/basic_sim_functions.R")
 ```
 
 # Set Up 
@@ -143,7 +143,7 @@ dat <- lapply(1:10, function(x) read_data_1000(x, "../data/mu_x1_minus_10_3rds/n
 ```{r}
 true_tau <- 1
 
-dat <- dat %>% filter (k <= 8) %>% mutate(
+dat <- dat %>% mutate(
               squared_err = (estimate-true_tau)**2,
               k = as.factor(k))
 

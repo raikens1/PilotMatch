@@ -12,7 +12,7 @@ require(dplyr)
 require(gridExtra)
 require(ggpubr)
 theme_set(theme_light())
-source("../code/simulation_functions.R")
+source("../code/basic_sim_functions.R")
 ```
 
 # To do

@@ -14,7 +14,7 @@ require(gridExtra)
 require(ggpubr)
 require(knitr)
 theme_set(theme_light())
-source("../code/simulation_functions.R")
+source("../code/basic_sim_functions.R")
 ```
 
 # Set Up 
