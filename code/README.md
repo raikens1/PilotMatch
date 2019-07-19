@@ -23,7 +23,8 @@ Once the data are obtained, they should be moved to an appropriate location in t
 ## File specifics
 
 In specific, the files to run most simulations are:
-- `basic_sim_functions.R` - based on `simulation_functions.R` by Dylan Greaves.  This file contains the functions to do pairmatching for most simulations.  This is also useful for making visualizations like in Figure 1.
+- `basic_sim_functions.R` - based on `simulation_functions.R` by Dylan Greaves.  This file contains functions that are needed for all simulations, such as the code to generate a simulated data set.  This is also useful for making visualizations like in Figure 1.
+- `pairmatch_sim_functions.R` - based on other code in `simulation_functions.R` by Dylan Greaves.  This file contains additional functions for pairmatching simulations.  Has `basic_sim_functions.R` as a dependency.
 - `fullmatch_sim_functions.R` - additional functions for fullmatching simulations.  Has `basic_sim_functions.R` as a dependency
 - `basic_sim_wrapper.R` - general wrapper used to run batches of NSIM simulations with specified parameters. Can be run from the command line but is more often called by `basic_sim_batch_driver.sh`.  Has `basic_sim_functions.R` and `fullmatch_sim_functions.R` as dependencies.
 - `basic_sim_batch_driver.sh` - a very simple shell script that calls `basic_sim_wrapper.R` 11 times to run simulations across each value of rho (0.0, 0.1, ... 1.0).  Each call to `basic_sim_wrapper.R` runs in the background in parallel and produces a `.log` file and a results file (`angle_sigma1_results...`).
