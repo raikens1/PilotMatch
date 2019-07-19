@@ -5,12 +5,12 @@ This repository contains the code and data used to write an upcoming paper on us
 
 ## Contents of this repo
 
-- **Analyses** - all vizualizations, interpretations, and analysis of simulated data are in .Rmd files here.
+- **Analyses** - all vizualizations, interpretations, and analysis of simulated data are in .Rmd files here. The most important files are `Main_Figures.Rmd`, which makes all of the main figures for the manuscript and `Supplementary_Figures.Rmd`, which contains all the supplementary figures.
 - **Code** - all code (R and bash) to run the simulations is here.
 - **Data** - all data produced from simulations is here.
-- **Figures** - current versions of all figures are here.
+- **Figures** - current versions of all figures are here.  These figures are automatically produced from the code in `analyses/Main_Figures.Rmd`
 
-Each subdirectory (except for **Figures**) contains a README further explaining the contents of that subdirectory.
+**Code** and **Data** each contain a README further explaining the contents of that subdirectory.
 
 ## Manuscript
 
