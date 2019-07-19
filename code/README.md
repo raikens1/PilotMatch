@@ -9,7 +9,7 @@ Here are some quick steps to get things up and running. The process below will l
 0. (Optional) start AWS EC2 instance `Rocky-Buffalo` or `Rocky-2Buffalo`
 
 1. Check/modify the parameters in basic_sim_wrapper.sh_ 
- - For defaults, see the section below titled "Simulation Parameter Notes"
+   - For defaults, see the section below titled "Simulation Parameter Notes"
 
 2. Run `sh basic_sim_batch_driver.sh NSIM`, where  
 
