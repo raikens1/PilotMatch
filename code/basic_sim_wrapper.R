@@ -18,12 +18,12 @@ p <- as.numeric(args[2])
 nsim <- as.numeric(args[3])
 
 # defaults
-true_mu <- "X1/3 - 3"
+true_mu <- "X1/3 - 2.75"
 sigma <- 1
 tau <- 1
 ks <- 1:10
-N <- 2000
-full <- F
+N <- 1600
+full <- T
 
 run_sim <- function(rho = 0.1, p = 10, nsim = 10,
                     out_file = "test_", true_mu = "X1/3 - 3", 

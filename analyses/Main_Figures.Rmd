@@ -15,6 +15,7 @@ require(ggpubr)
 require(knitr)
 theme_set(theme_light())
 source("../code/basic_sim_functions.R")
+set.seed(123)
 ```
 
 # Set Up 
@@ -64,14 +65,14 @@ match_viz <- function(data, match, rho, k = 1, title = "Matching"){
     dplyr::select(prog1, prog2, prop1, prop2)
   
   plt <- ggplot(data = plt_data, aes( x = prop, y = prog, group = t, color = t)) + 
-    geom_point(aes(alpha = a))+
+    geom_point(aes(alpha = a), size = 1)+
     scale_color_brewer(palette="Set1") +
     geom_segment(data = m_data, 
                  aes(x = prop1, y = prog1,
                      xend = prop2, yend = prog2),
                  color =  "black", group = NA, linetype = "dashed") +
     ggtitle( title)+
-    theme(legend.position = "none", aspect.ratio=1, plot.title = element_text(hjust = 0.5, size = 8))+
+    theme(legend.position = "none", aspect.ratio=1, plot.title = element_text(hjust = 0.5, size = 9))+
     ylab(expression(paste(Psi, "(x)", sep = ""))) +
     xlab(expression(paste(phi, "(x)", sep = "")))
   
@@ -113,7 +114,7 @@ prognostic_match_assignment <- function(df, propensity, match_assignment, prog_m
 ```
 
 ```{r}
-rho <- 0
+rho <- 0.5
 #simulate data
 df <- generate_data(N = 2000, p = 10, true_mu = "X1/3-3", rho = rho, sigma = 1)
 k = 1
@@ -136,7 +137,7 @@ oracle_prop_match <- pairmatch(t ~ prop, controls = k, oracle_df)
 oracle_prog_match <- pairmatch(t ~ prog + prop, controls = k, oracle_df)
 ```
 
-```{r, fig.width=8.5, fig.height= 3.5}
+```{r, fig.width=8, fig.height= 3}
 a <- match_viz(df, m_match, rho, title = "Mahalanobis Match")
 b <- match_viz(df, oracle_prop_match, rho, title = "True Propensity Match")
 c <- match_viz(df, oracle_prog_match, rho, title = "True Propensity x Prognosis Match")
@@ -297,8 +298,8 @@ dat <- mutate(dat,
 plt_data <- dat %>% 
   group_by(method, rho) %>% 
   summarize(Bias = abs(mean(estimate) - true_tau), 
-            Variance = var(estimate),
-            MSE = Bias^2 + Variance) %>%
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
   ungroup() %>%
   mutate(method = recode(method, propensity = "Propensity", 
                          mahalanobis = "Mahalanobis", 
@@ -312,16 +313,17 @@ plt_data <- plt_data %>%
 ```
 
 
-```{r, fig.width=8, fig.height = 2.5}
+```{r, fig.width=8, fig.height = 3}
 a <- ggplot(plt_data, aes(x = rho, y = Bias, group = method, color = method)) +
   geom_line() + geom_point() +
   xlab(expression(paste("Correlation, ", rho)))+
   theme(legend.title=element_blank())+
   scale_color_brewer(palette="Set1")
 
-b <- ggplot(plt_data, aes(x = rho, y = Variance,  group = method, color = method)) +
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation,  group = method, color = method)) +
   geom_line() + geom_point() +
   xlab(expression(paste("Correlation, ", rho)))+
+  ylab("Standard Deviation")+
   theme(legend.title=element_blank())+
   scale_color_brewer(palette="Set1")
 
@@ -337,31 +339,7 @@ ggarrange(a, b, c, ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom", 
 ```{r fig.width=8.5, fig.height=6, echo = FALSE}
 p <- ggarrange(a,b,c, ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom", labels = "AUTO")
 
-ggsave("../figures/Figure4.pdf", p,  width=8.5, height=2.5)
-```
-
-```{r, fig.width=8.5, fig.height=6, echo = FALSE}
-plt_data <- plt_data  %>%
-  filter(method != "Mahalanobis")
-
-a <- ggplot(plt_data, aes(x = rho, y = Bias)) +
-  geom_line() + geom_point() +
-  xlab(expression(paste("Correlation, ", rho)))+
-  facet_wrap(~method) +
-  scale_color_brewer(palette="RdYlBu")
-
-b <- ggplot(plt_data, aes(x = rho, y = Variance)) +
-  geom_line() + geom_point() + facet_wrap(~method) +
-  xlab(expression(paste("Correlation, ", rho)))+
-  scale_color_brewer(palette="RdYlBu")
-
-c <- ggplot(plt_data, aes(x = rho, y = MSE)) +
-  geom_line() + geom_point() + 
-  xlab(expression(paste("Correlation, ", rho)))+
-  facet_wrap(~method)+
-  scale_color_brewer(palette="RdYlBu")
-
-ggarrange(a, b, c, ncol = 1, nrow = 3, common.legend = TRUE, legend = "right", labels = "AUTO")
+ggsave("../figures/Figure4.pdf", p,  width=8.5, height=3)
 ```
 
 ### 5.2.3 Tradeoff in match quality
@@ -458,16 +436,16 @@ mahal_match <- pairmatch(mahal_dist, controls = 2, df)
 buff_match_assignment <- prognostic_match_assignment(df, propensity, mahal_match, prog_model, k)
 ```
 
-```{r, fig.width=8.5, fig.height= 3.5}
+```{r, fig.width=8, fig.height= 3}
 a <- match_viz(df, m_match, rho, title = "Mahalanobis Match")
-b <- match_viz(df, prop_match, rho, title = "True Propensity Match")
-c <- match_viz(buff_match_assignment$df, buff_match_assignment$match, rho, title = "True Propensity x Prognosis Match")
+b <- match_viz(df, prop_match, rho, title = "Estimated Propensity Match")
+c <- match_viz(buff_match_assignment$df, buff_match_assignment$match, rho, title = "Estimated Propensity x Prognosis Match")
 
 ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
 ```
 
 ```{r}
-pdf("../figures/Figure6.pdf",  width=8.5, height=3.5)
+pdf("../figures/Figure6.pdf",  width=8, height=3)
 ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
 dev.off()
 ```
