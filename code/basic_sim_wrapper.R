@@ -6,6 +6,7 @@
 
 source("basic_sim_functions.R")
 source("fullmatch_sim_functions.R")
+source("pairmatch_sim_functions.R")
 
 out_file <- "angle_sigma1_results_"
 
@@ -18,12 +19,12 @@ p <- as.numeric(args[2])
 nsim <- as.numeric(args[3])
 
 # defaults
-true_mu <- "X1/3 - 2.75"
+true_mu <- "X1/3 - 3"
 sigma <- 1
 tau <- 1
 ks <- 1:10
-N <- 1600
-full <- T
+N <- 2000
+full <- F
 
 run_sim <- function(rho = 0.1, p = 10, nsim = 10,
                     out_file = "test_", true_mu = "X1/3 - 3", 
@@ -50,7 +51,7 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10,
                        simplify = FALSE) %>% 
       bind_rows()
   } else {
-    results <- replicate(nsim, simulate(generate_data(N=N, rho=rho, p = p, true_mu = true_mu, sigma = sigma, tau = tau),
+    results <- replicate(nsim, simulate_pairmatch(generate_data(N=N, rho=rho, p = p, true_mu = true_mu, sigma = sigma, tau = tau),
                                              verbose = TRUE, ks = ks),
                          simplify = FALSE) %>% 
       bind_rows()

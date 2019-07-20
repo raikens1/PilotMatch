@@ -11,13 +11,13 @@ require(sensitivityfull)
 
 source("../code/basic_sim_functions.R")
 
-#' @title simulate 
+#' @title simulate Pairmatch
 #' @param df, a data.frame from generate_data
 #' @param prop_model, the propensity score model
 #' @param prog_model, the prognostic score model
 #' @param ks, a vector of positive numbers indicating the number of controls to match to each treated
 #' @return a data.frame with results from propensity, mahalanobis, and buffalo matching ??
-simulate <- function(df, 
+simulate_pairmatch <- function(df, 
                      prop_model = formula(t ~ . - mu - y), 
                      prog_model = formula(y ~ . - mu - t),
                      verbose = FALSE,
