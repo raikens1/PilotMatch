@@ -2,7 +2,7 @@
 title: "Full Matching"
 author: "Rachael Caelie (Rocky) Aikens"
 date: "5/15/2019"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup, warning=FALSE, message = FALSE, include = FALSE}
@@ -112,6 +112,69 @@ read_data_1000 <- function(i, path_to_file){
 }
 
 dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fullmatch/N_1600/")) %>% bind_rows()
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2)
+
+plt_data <- dat %>% 
+  group_by(method, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+
+```{r, fig.width=8, fig.height = 3}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = method, color = method)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  theme(legend.title=element_blank())+
+  scale_color_brewer(palette="Set1")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation,  group = method, color = method)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  ylab("Standard Deviation")+
+  theme(legend.title=element_blank())+
+  scale_color_brewer(palette="Set1")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = method, color = method)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  theme(legend.title=element_blank())+
+  scale_color_brewer(palette="Set1")
+
+ggarrange(a, b, c, ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom", labels = "AUTO")
+```
+
+# Smaller sample size
+
+
+Here, I try again with n=1000.  Buffalo is *still* outperforming propensity score in terms of mean squared error, although the difference is small.  When the extra gains in gamma sensitivity are considered, this means that Buffalo matching could be a reasonable alternative when the sample size is as low as 1000 (recall, this is a 1:9 treat:control ratio.)
+
+```{r}
+read_data_1000 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fullmatch/N_1000/")) %>% bind_rows()
 ```
 
 ```{r}
