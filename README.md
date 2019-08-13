@@ -1,7 +1,7 @@
-# Buffalo
+# Pilot Matching
 *Authors:* Rocky Aikens, Dylan Greaves, Michael Baiocchi
 
-This repository contains the code and data used to write an upcoming paper on using the prognostic score in matching for causal inference from observational studies
+This repository contains the code and data used to write an upcoming paper: Using the Prognostic score to Reduce Heterogeneity in Observational Studies"
 
 ## Contents of this repo
 
