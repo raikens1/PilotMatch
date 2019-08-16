@@ -20,7 +20,7 @@ set.seed(123)
 
 # Set Up 
 
-We compare the performance of propensity score matching, Mahalanobis distance matching, and Buffalo Matching (described in the previous section) on simulated data, varying the dimensionality of the problem, the fixed treatment to control ratio during matching, and the correlation between the true propensity and prognostic score. The generative model for all of our simulations is the following:
+We compare the performance of propensity score matching, Mahalanobis distance matching, and pilot matching (described in the manuscript) on simulated data, varying the dimensionality of the problem, the fixed treatment to control ratio during matching, and the correlation between the true propensity and prognostic score. The generative model for all of our simulations is the following:
 \begin{align*}
     X_i &\sim_{iid} \text{Normal}(0,I_p),\\
     T_i &\sim_{iid} \text{Bernoulli}\left(\frac{1}{1+\exp(-\phi(X_i))}\right),\\
@@ -153,9 +153,9 @@ dev.off()
 
 # 5 Results 
 
-## 5.1 Buffalo Performance with a large control reserve
+## 5.1 Pilot matching performance with a large control reserve
 
-Below, we use the simulation parameters described in the set up to estimate the bias, variance, mse, and median gamma sensitivity of effect estimates produced from Mahalanobis distance matching, propensity score matching, and Buffalo matching.
+Below, we use the simulation parameters described in the set up to estimate the bias, variance, mse, and median gamma sensitivity of effect estimates produced from Mahalanobis distance matching, propensity score matching, and pilot matching.
 
 ```{r}
 read_data_1000 <- function(i, path_to_file){
@@ -177,20 +177,20 @@ dat <- mutate(dat,
 
 plt_data <- dat %>% 
   group_by(method, k, rho) %>% 
-  summarize(Bias = abs(mean(estimate) - true_tau), 
+  summarize(Bias = mean(estimate) - true_tau, 
             median_gamma = median(gamma), 
             Standard.Deviation = sd(estimate),
             MSE = Bias^2 + Standard.Deviation^2) %>%
   ungroup() %>%
   mutate(method = recode(method, propensity = "Propensity", 
                          mahalanobis = "Mahalanobis", 
-                         prognostic = "Buffalo"))
+                         prognostic = "Pilot"))
 ```
 
 
 ```{r}
 plt_data <- plt_data %>%
-  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
 ```
 
 ```{r, fig.width=8.5, fig.height=6}
@@ -203,6 +203,7 @@ a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
 b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
   geom_line() + geom_point() + facet_wrap(~method) +
   xlab(expression(paste("Correlation, ", rho)))+
+  ylab("Standard Deviation")+
   scale_color_brewer(palette="RdYlBu")
 
 c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
@@ -232,7 +233,7 @@ Figure 1 shows the bias and variance of $1:k$ matching for each method on the sa
 
 A first observation is that the bias from Mahalanobis distance matching is large, and it increases with the correllation between prognosis and treatment assignment (Figure 1A). This is probably because, as $\rho$ approaches 1, only a single covariate, $X_{i1}$ is important to match on, yet Mahalanobis distance considers 9 other covariates which are entirely random noise unimportant to the problem. It thus selects worse matches with respect to the true covariate of interest. This problem is exacerbated when the number of uninformative covariates is increased (Supplementary Figure 3).
 
-Figure 1B shows the protective effect of Buffalo matching against the variance of the estimator.  Propensity score matching has highest variance, and this is worse when $\rho$ is close to zero.  This is because, when $\rho$ is small, the propensity score contains no information about prognosis under the control assignment.  This causes the propensity score method to match observations which may be very different in terms of their potential outcome under the control assignment, giving poor prognostic balance and thus larger variance in the estimate of the causal effect.  While Mahalanobis distance performs slightly better, it is again choosing lower quality matches because of the uninformative covariates in the data. The lowest variance is achieved by Buffalo matching, since this algorithm optimizes for prognostic balance as well as propensity score balance.
+Figure 1B shows the protective effect of pilot matching against the variance of the estimator.  Propensity score matching has highest variance, and this is worse when $\rho$ is close to zero.  This is because, when $\rho$ is small, the propensity score contains no information about prognosis under the control assignment.  This causes the propensity score method to match observations which may be very different in terms of their potential outcome under the control assignment, giving poor prognostic balance and thus larger variance in the estimate of the causal effect.  While Mahalanobis distance performs slightly better, it is again choosing lower quality matches because of the uninformative covariates in the data. The lowest variance is achieved by pilot matching, since this algorithm optimizes for prognostic balance as well as propensity score balance.
 
 ```{r fig.width=8.5, fig.height=6, echo = FALSE}
 ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
@@ -244,12 +245,12 @@ p <- ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right",
 ggsave("../figures/Figure3.pdf", p,  width=8.5, height=5.5)
 ```
 
-Figure 2 shows the mean squared error and median gamma sensitivity from the same set of simulations as above.  Figure 2A demonstrates that Buffalo does well compared to the other two methods in terms of mean squared error, because of the protection against bias and variance shown in figure 1. Figure 2B shows the protective effect of prognostic balance against unobserved confounding.  Propensity score matching gives lowest $\Gamma$ values, especially when $\rho$ is small. When this happens, the propensity score contains no prognostically relevant covariates, so the matches produced have poor prognostic balance.  As $\rho$ increases, the prognostic score and the propensity score become highly correllated, so matching on propensity score starts to give some prognostic balance as well as propensity balance.  While the Gamma sentistivity of Mahalanobis distance matching seems promising when $\rho$ is large, most of this is likely due to the large amount of bias in the effect estimate from this method (Figure 1A).  Because Buffalo matching directly attempts to achieve prognostic balance in the matched sets, the Buffalo method has better protection against unobserved confounding, without giving a highly biased estimator.
+Figure 2 shows the mean squared error and median gamma sensitivity from the same set of simulations as above.  Figure 2A demonstrates that pilot matching does well compared to the other two methods in terms of mean squared error, because of the protection against bias and variance shown in figure 1. Figure 2B shows the protective effect of prognostic balance against unobserved confounding.  Propensity score matching gives lowest $\Gamma$ values, especially when $\rho$ is small. When this happens, the propensity score contains no prognostically relevant covariates, so the matches produced have poor prognostic balance.  As $\rho$ increases, the prognostic score and the propensity score become highly correllated, so matching on propensity score starts to give some prognostic balance as well as propensity balance.  While the Gamma sentistivity of Mahalanobis distance matching seems promising when $\rho$ is large, most of this is likely due to the large amount of bias in the effect estimate from this method (Figure 1A).  Because pilot matching directly attempts to achieve prognostic balance in the matched sets, the pilot matching method has better protection against unobserved confounding, without giving a highly biased estimator.
 
 
 ## 5.2 Methodological Considerations
 
-In the previous section, we illustrated a use case in which Buffalo Matching is very useful: There is an abundance of control individuals which overlap fairly well with the treated population, and the underlying processes dictating propensity and prognosis are easily fit with standard linear models.  In this section, we consider four design considerations which are important to the selection of the method: 
+In the previous section, we illustrated a use case in which pilot matching is very useful: There is an abundance of control individuals which overlap fairly well with the treated population, and the underlying processes dictating propensity and prognosis are easily fit with standard linear models.  In this section, we consider four design considerations which are important to the selection of the method: 
 
 (1) Correlation of treatment and prognosis (confoundedness)
 
@@ -265,15 +266,15 @@ A first consideration is the confoundedness of the problem, modeled here as the 
 
 One result worth remarking on is that propensity score matching is lowest variance when confoundedness is worse.  This is because, when propensity and prognosis are highly correllated, matching on the covariates most important for treatment assignment also imposes balance in the covariate most important for prognosis. This imposes prognostic balance, protecting against the variance (Figure 2B) and increasing robustness to confounding (Figure 3B).
 
-In contrast, when treatment assignment is less closely correlated with potential outcome, propensity score matching suffers most from issues of high variance in the effect estimate (Figure 2B), because ideal propensity score matches may be quite distant in terms of the covariates most important to outcome (Figure 1B).  These are the scenarios in which buffalo matching is most protective against variance in estimation, since it imposes prognostic balance on the matched sets as well as propensity balance.
+In contrast, when treatment assignment is less closely correlated with potential outcome, propensity score matching suffers most from issues of high variance in the effect estimate (Figure 2B), because ideal propensity score matches may be quite distant in terms of the covariates most important to outcome (Figure 1B).  These are the scenarios in which pilot matching is most protective against variance in estimation, since it imposes prognostic balance on the matched sets as well as propensity balance.
 
 ### 5.2.2 Tradeoff in sample size
 
-A second consideration is the tradeoff in control sample size implicit in creating a held-aside set for fitting the prognostic score prior to matching.  In the Buffalo Algorithm, one control individual for each treated observation is removed from the analysis data set for the purpose of fitting the prognostic score, amounting to a sacrifice of $\sim 100$ observations. 
+A second consideration is the tradeoff in control sample size implicit in creating a held-aside set for fitting the prognostic score prior to matching.  In the Pilot Matching Algorithm, one control individual for each treated observation is removed from the analysis data set for the purpose of fitting the prognostic score, amounting to a sacrifice of $\sim 100$ observations. 
 
 Section 5.2.3 considers the effect of this sacrifice on the quality of the available matches, and the influence that this has on the bias of the estimator. For the moment, let us consider the effect of this sacricice on the variance of the estimator, since removing this hold-out set means fewer control individuals may be matched to each treated individual (smaller $k$ in $1:k$ matching). Generally speaking, the central limit theorem implies that the variance of an estimator tends to decrease with $\frac{1}{n}$, where $n$ is the sample size.  This means that decreasing the sample size by $\sim 100$ is likely to have a very large effect on variance when the original sample size is small, and a relatively small effect when the original sample size is much larger than 100. Thus, when the control reserve is much larger in size than the held aside sample, the loss of those observations from the analysis phase will have a small effect on sample variance.
 
-Meanwhile, inducing prognostic balance in the analysis set has a variance-reducing effect for equivalent sample sizes (Figure 2B). This means that when the control reserve is very large (say, greater than 1500), it may in fact be variance-*reducing* to "sacrifice" some individuals from the analysis set so that the overall matched sets obtained in the analysis phase have better prognostic balance.  This trade-off, of course, depends on the total size of the control reserve.  In order to illustrate this, we simulated fullmatching on Mahalanobis Distance, Propensity score, and Buffalo Matching.  Since fullmatch uses all of the treated and control individuals, the Buffalo fullmatch has ~100 fewer control individuals to use for estimation than the alternative methods.  However, when the control reserve is large, the variance of the estimator from Buffalo fullmatching is actually smaller than that for the other methods (Figure 4).
+Meanwhile, inducing prognostic balance in the analysis set has a variance-reducing effect for equivalent sample sizes (Figure 2B). This means that when the control reserve is very large (say, greater than 1500), it may in fact be variance-*reducing* to "sacrifice" some individuals from the analysis set so that the overall matched sets obtained in the analysis phase have better prognostic balance.  This trade-off, of course, depends on the total size of the control reserve.  In order to illustrate this, we simulated fullmatching on Mahalanobis distance, propensity score, and pilot matching.  Since fullmatch uses all of the treated and control individuals, the pilot fullmatch has ~100 fewer control individuals to use for estimation than the alternative methods.  However, when the control reserve is large, the variance of the estimator from pilot fullmatching is actually smaller than that for the other methods (Figure 4).
 
 ```{r}
 read_data_1000 <- function(i, path_to_file){
@@ -297,19 +298,21 @@ dat <- mutate(dat,
 
 plt_data <- dat %>% 
   group_by(method, rho) %>% 
-  summarize(Bias = abs(mean(estimate) - true_tau), 
+  summarize(Bias = mean(estimate) - true_tau, 
             Standard.Deviation = sd(estimate),
             MSE = Bias^2 + Standard.Deviation^2) %>%
   ungroup() %>%
-  mutate(method = recode(method, propensity = "Propensity", 
-                         mahalanobis = "Mahalanobis", 
-                         prognostic = "Buffalo"))
+  mutate(method = recode(method, propensity = "Propensity full match", 
+                         mahalanobis = "Mahalanobis full match", 
+                         prognostic = "Pilot full match"))
 ```
 
 
 ```{r, echo = FALSE}
 plt_data <- plt_data %>%
-  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+  mutate(method = factor(method, levels = c("Mahalanobis full match", "Propensity full match", "Pilot full match"))) 
+
+
 ```
 
 
@@ -344,11 +347,11 @@ ggsave("../figures/Figure4.pdf", p,  width=8.5, height=3)
 
 ### 5.2.3 Tradeoff in match quality
 
-As opposed to the variance-reducing effect discussed above, Buffalo Matching does tend to have the effect of *increasing* bias because of the loss of individuals from the control reserve which might otherwise have been effective matches. In essence, some of the held-aside control individuals used to build the prognostic score may actually have been potential high-quality matches to the treated individuals. This can force the subsequent matching to compromise on lower quality matches, increasing bias and - in some cases - variance (see supplement).  This effect is most pronounced when (1) k is large, (2) the control reserve is small, and (2) overlap of the treated and control individuals is poor (Figure 2A, Figure 5A). When $k$ is large, bias for all methods is worse because lower and lower quality matches are being carried over to the analysis phase.  If the control reserve is small and/or there is little overlap between the treated and control individuals, every control individual which is close in covariate space to the treated individuals is a precious potential match, and sacrificing these individuals means that there are fewer good alternatives to choose from.  Additionally, we find that poor overlap combined with high confoundedness (large $\rho$) tends to increase the variance of the estimator for both Buffalo and propensity score matching (see Supplement).  We hypothesize that this is because both methods are forced to chose matches which are more distant both in propensity and prognostic score.  In particular, this prognostic imbalance induces increased variance in estimation.
+As opposed to the variance-reducing effect discussed above, pilot matching does tend to have the effect of *increasing* bias because of the loss of individuals from the control reserve which might otherwise have been effective matches. In essence, some of the held-aside control individuals used to build the prognostic score may actually have been potential high-quality matches to the treated individuals. This can force the subsequent matching to compromise on lower quality matches, increasing bias and - in some cases - variance (see supplement).  This effect is most pronounced when (1) k is large, (2) the control reserve is small, and (2) overlap of the treated and control individuals is poor (Figure 2A, Figure 5A). When $k$ is large, bias for all methods is worse because lower and lower quality matches are being carried over to the analysis phase.  If the control reserve is small and/or there is little overlap between the treated and control individuals, every control individual which is close in covariate space to the treated individuals is a precious potential match, and sacrificing these individuals means that there are fewer good alternatives to choose from.  Additionally, we find that poor overlap combined with high confoundedness (large $\rho$) tends to increase the variance of the estimator for both pilot and propensity score matching (see Supplement).  We hypothesize that this is because both methods are forced to chose matches which are more distant both in propensity and prognostic score.  In particular, this prognostic imbalance induces increased variance in estimation.
 
-As a result, we advise the following.  First, the number, $k$, of treated individuals to be matched to each control individual, should always be chosen with the size of the control reserve and the overlap of treated and control observations, regardless of the particular matching distance specification used. When overlap is poor and the number of control individuals is sparse, increasing $k$ will increase the bias of all methods considered here.  Second, the selection of the control individuals for the held-out set is a nuanced design decision (discussed further in the discussion section). Just as with the selection of $k$, the choice to use Buffalo Matching and the selection of the held-out set should depend on the data. Because of the sacrifice in match quality associated with discarding some individuals, Buffalo Matching is most appropriate when the control reserve is plentiful, particularly in the region of overlap between treated and control individuals.  
+As a result, we advise the following.  First, the number, $k$, of treated individuals to be matched to each control individual, should always be chosen with the size of the control reserve and the overlap of treated and control observations, regardless of the particular matching distance specification used. When overlap is poor and the number of control individuals is sparse, increasing $k$ will increase the bias of all methods considered here.  Second, the selection of the control individuals for the held-out set is a nuanced design decision (discussed further in the discussion section). Just as with the selection of $k$, the choice to use pilot matching and the selection of the held-out set should depend on the data. Because of the sacrifice in match quality associated with discarding some individuals, pilot matching is most appropriate when the control reserve is plentiful, particularly in the region of overlap between treated and control individuals.  
 
-One potential simplification of this issue is to use fullmatch rather than 1:k matching, since fullmatch deals elegantly with the problem of the ratios of treated and control individuals varying across the covariate space.  Figure 5 shows the results of fullmatching using Mahalanobis distance, propensity score, and Buffalo.
+One potential simplification of this issue is to use fullmatch rather than 1:k matching, since fullmatch deals elegantly with the problem of the ratios of treated and control individuals varying across the covariate space.  Figure 5 shows the results of fullmatching using Mahalanobis distance, propensity score, and pilot matching.
 
 
 ```{r}
@@ -364,19 +367,19 @@ dat <- mutate(dat,
 
 plt_data <- dat %>% 
   group_by(method, k, rho) %>% 
-  summarize(Bias = abs(mean(estimate) - true_tau), 
+  summarize(Bias = mean(estimate) - true_tau, 
             median_gamma = median(gamma), 
             Standard.Deviation = sd(estimate),
             MSE = Bias^2 + Standard.Deviation^2) %>%
   ungroup() %>%
   mutate(method = recode(method, propensity = "Propensity", 
                          mahalanobis = "Mahalanobis", 
-                         prognostic = "Buffalo"))
+                         prognostic = "Pilot"))
 ```
 
 ```{r, echo = FALSE}
 plt_data <- plt_data %>%
-  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
 ```
 
 ```{r, fig.width=8.5, fig.height=6, echo = FALSE}
@@ -389,6 +392,7 @@ a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
 b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
   geom_line() + geom_point() + facet_wrap(~method) +
   xlab(expression(paste("Correlation, ", rho)))+
+    ylab("Standard Deviation")+
   scale_color_brewer(palette="RdYlBu")
 
 ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
@@ -420,7 +424,7 @@ ggsave("../figures/Figure5.pdf", p,  width=8.5, height=7)
 
 A final consideration is that of fitting the propensity and prognostic models themselves.  This simulation was largely a proof of concept, with the true data generating processes for treatment assigment and prognosis fairly simple and easily fit by common linear modeling methodologies.  In practice, the researcher may choose to draw from whatever model fitting methodologies they prefer to capture the prognostic score.
 
-It is intuitive that the value of buffalo matching is greatest when the propensity and prognostic score models are most accurate.  In contrast to figure 1, which shows the idealized matchings that would be selected if the propensity and prognostic scores were precisely known, figure 6 displays the matches which might be selected in practice.  Both propensity and buffalo matching methods rely on the assumption that the prognosis and propensity for treatment are easy to estimate; in cases where the model is imperfect, imperfect matches may be selected.  In fact, in simulations where more random variation is added to the outcome, we find that the performance of buffalo is diminished because the prognostic score is harder to fit (Supplement).  In cases like these, it may be useful to budget more data for fitting the prognostic score (if able), or use more sophisticated modeling techniques.  In cases where the control reserve is practically infinitely abundant, this may be an opportunity to leverage more data for the purposes of building a very accurate model for prognosis to be used in matching.
+It is intuitive that the value of pilot matching is greatest when the propensity and prognostic score models are most accurate.  In contrast to figure 1, which shows the idealized matchings that would be selected if the propensity and prognostic scores were precisely known, figure 6 displays the matches which might be selected in practice.  Both propensity and pilot matching methods rely on the assumption that the prognosis and propensity for treatment are easy to estimate; in cases where the model is imperfect, imperfect matches may be selected.  In fact, in simulations where more random variation is added to the outcome, we find that the performance of pilot matching is diminished because the prognostic score is harder to fit (Supplement).  In cases like these, it may be useful to budget more data for fitting the prognostic score (if able), or use more sophisticated modeling techniques.  In cases where the control reserve is practically infinitely abundant, this may be an opportunity to leverage more data for the purposes of building a very accurate model for prognosis to be used in matching.
 
 ```{r}
 # Build scores empirically for propensity and prognostic match

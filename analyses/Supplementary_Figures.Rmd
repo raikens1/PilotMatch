@@ -39,19 +39,19 @@ dat <- dat %>% mutate(
 
 plt_data <- dat %>%
   group_by(method, k, rho) %>% 
-  summarize(Bias = abs(mean(estimate) - true_tau), 
+  summarize(Bias = mean(estimate) - true_tau, 
             median_gamma = median(gamma), 
             Standard.Deviation = sd(estimate),
             MSE = Bias^2 + Standard.Deviation^2) %>%
   ungroup() %>%
   mutate(method = recode(method, propensity = "Propensity", 
                          mahalanobis = "Mahalanobis", 
-                         prognostic = "Buffalo"))
+                         prognostic = "Pilot"))
 ```
 
 ```{r, echo = FALSE}
 plt_data <- plt_data %>%
-  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
 ```
 
 ```{r, fig.width=8.5, fig.height=6, echo = FALSE}
@@ -63,6 +63,7 @@ a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
 
 b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
   geom_line() + geom_point() + facet_wrap(~method) +
+    ylab("Standard Deviation")+
   xlab(expression(paste("Correlation, ", rho)))+
   scale_color_brewer(palette="RdYlBu")
 
@@ -110,24 +111,25 @@ dat <- dat %>% mutate(
 
 plt_data <- dat %>%
   group_by(method, k, rho) %>% 
-  summarize(Bias = abs(mean(estimate) - true_tau), 
+  summarize(Bias = mean(estimate) - true_tau, 
             median_gamma = median(gamma), 
             Standard.Deviation = sd(estimate),
             MSE = Bias^2 + Standard.Deviation^2) %>%
   ungroup() %>%
   mutate(method = recode(method, propensity = "Propensity", 
                          mahalanobis = "Mahalanobis", 
-                         prognostic = "Buffalo"))
+                         prognostic = "Pilot"))
 ```
 
 ```{r, echo = FALSE}
 plt_data <- plt_data %>%
-  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
 ```
 
 ```{r, fig.width=8.5, fig.height=3, echo = FALSE}
 b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation , group = k, color = k)) +
   geom_line() + geom_point() + facet_wrap(~method) +
+    ylab("Standard Deviation")+
   xlab(expression(paste("Correlation, ", rho)))+
   scale_color_brewer(palette="RdYlBu")
 b
@@ -152,19 +154,19 @@ dat <- dat %>% mutate(
 
 plt_data <- dat %>%
   group_by(method, k, rho) %>% 
-  summarize(Bias = abs(mean(estimate) - true_tau), 
+  summarize(Bias = mean(estimate) - true_tau, 
             median_gamma = median(gamma), 
             Standard.Deviation = sd(estimate),
             MSE = Bias^2 + Standard.Deviation^2) %>%
   ungroup() %>%
   mutate(method = recode(method, propensity = "Propensity", 
                          mahalanobis = "Mahalanobis", 
-                         prognostic = "Buffalo"))
+                         prognostic = "Pilot"))
 ```
 
 ```{r, echo = FALSE}
 plt_data <- plt_data %>%
-  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
 ```
 
 ```{r, fig.width=8.5, fig.height=6, echo = FALSE}
@@ -176,6 +178,7 @@ a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
 
 b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
   geom_line() + geom_point() + facet_wrap(~method) +
+    ylab("Standard Deviation")+
   xlab(expression(paste("Correlation, ", rho)))+
   scale_color_brewer(palette="RdYlBu")
 
@@ -196,4 +199,4 @@ ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labe
 
 ```
 
-**Supplementary Figure 3:** MSE and median gamma design sensitivity when the random noise contributing to the outcome is increased.  All simulation parameters are the same as described in Section 4.1, except that $\sigma = 2$ This increases the difficulty of fitting the prognostic score, diminishing the relative performance of Buffalo matching in terms of MSE and sensitivity.
+**Supplementary Figure 3:** MSE and median gamma design sensitivity when the random noise contributing to the outcome is increased.  All simulation parameters are the same as described in Section 4.1, except that $\sigma = 2$ This increases the difficulty of fitting the prognostic score, diminishing the relative performance of pilot matching in terms of MSE and sensitivity.

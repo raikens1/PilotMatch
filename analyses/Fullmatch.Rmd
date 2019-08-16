@@ -2,7 +2,7 @@
 title: "Full Matching"
 author: "Rachael Caelie (Rocky) Aikens"
 date: "5/15/2019"
-output: pdf_document
+output: pdf›_document
 ---
 
 ```{r setup, warning=FALSE, message = FALSE, include = FALSE}
@@ -104,14 +104,14 @@ ggarrange(a, b, c, ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom", 
 Below, we perform the same analysis with a reduced sample size of $n=1600$.  The propensity formula, $\phi$ was adjusted to $X_{i1}/3 - 2.75$, so that there would still be approximately 100 treated individuals in each sample.  Interestingly, the results are pretty much the same.
 
 ```{r}
-read_data_1000 <- function(i, path_to_file){
+read_data_2000 <- function(i, path_to_file){
   filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_2000", sep = "")
   dat <- read.csv(filename) %>%
     mutate(rho = i/10)
   return(dat)
 }
 
-dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fullmatch/N_1600/")) %>% bind_rows()
+dat <- lapply(1:10, function(x) read_data_2000(x, "../data/fullmatch/N_1600/")) %>% bind_rows()
 ```
 
 ```{r}
@@ -223,3 +223,79 @@ c <- ggplot(plt_data, aes(x = rho, y = MSE, group = method, color = method)) +
 
 ggarrange(a, b, c, ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom", labels = "AUTO")
 ```
+
+
+# Performance with varying sample size
+
+```{r}
+read_data_1000 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat1 <- lapply(1:10, function(x) read_data_1000(x, "../data/fullmatch/N_1000/")) %>% bind_rows %>% mutate(N = 1000)
+dat2 <- lapply(1:10, function(x) read_data_1000(x, "../data/fullmatch/N_1000/extra_run/")) %>% bind_rows %>% mutate(N = 1000)
+
+dat_1000 <- rbind(dat1, dat2)
+
+dat1 <- lapply(1:10, function(x) read_data_1000(x, "../data/fullmatch/N_2000/")) %>% bind_rows %>% mutate(N = 2000)
+dat2 <- lapply(1:10, function(x) read_data_1000(x, "../data/fullmatch/N_2000/Extra_run/")) %>% bind_rows %>% mutate(N = 2000)
+
+dat_2000 <- rbind(dat1, dat2)
+
+dat_1600 <- lapply(1:10, function(x) read_data_2000(x, "../data/fullmatch/N_1600/")) %>% bind_rows %>% mutate(N = 1600)
+```
+
+```{r}
+dat <- rbind(dat_1000, dat_1600, dat_2000)
+
+plt_data <- dat %>%
+  group_by(N, method, rho) %>%
+  summarize(mse = mse(estimate)) %>% filter(method != "mahalanobis")
+
+ggplot(plt_data, aes(x = rho, y = mse, group = as.factor(method), color = as.factor(method))) + geom_line() + facet_wrap(~N)
+```
+
+
+```{r}
+mse <- function(x) {
+  bias <- abs(mean(x) - 1)
+  sdev <- sd(x)
+  mse <- bias^2 + sdev^2
+  return(mse)
+}
+
+boot_mse <- function(x){
+  boots <- sort(replicate(10000, mse(sample(x, replace = TRUE))))
+  return(list(low = boots[500], high = boots[9500]))
+}
+
+dat_1000 %>% group_by(method) %>% summarize(mse = mse(estimate))
+dat_2000 %>% group_by(method) %>% summarize(mse = mse(estimate))
+dat_1600 %>% group_by(method) %>% summarize(mse = mse(estimate))
+
+subdat <- dat_1000 %>% filter(method == "propensity")
+```
+
+```{r}
+dat <- 
+```
+
+
+```{r}
+R_MAX_VSIZE=100Gb
+
+# bootstrapping with 1000 replications 
+results <- boot(data=dat, statistic=mse, 
+   R=1000, true_tau = 1)
+
+# view results
+results 
+plot(results)
+
+# get 95% confidence interval (nonparametric bootstrap)
+boot.ci(results, type="bca")
+```
+
