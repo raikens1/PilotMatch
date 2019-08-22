@@ -1,7 +1,11 @@
 ---
 title: "Supplementary Figures"
-author: "Rachael Caelie (Rocky) Aikens"
-date: "5/8/2019"
+subtitle: 'Using the Prognostic Score to Reduce Heterogeneity in Observational Studies'
+author: 
+- Rachael C. Aikens
+- Dylan Greaves
+- Michael Baiocchi
+date: "8/23/2019"
 output: pdf_document
 ---
 
@@ -14,8 +18,6 @@ require(ggpubr)
 theme_set(theme_light())
 source("../code/basic_sim_functions.R")
 ```
-
-# Supplementary Figure 1
 
 ```{r}
 read_data_1000 <- function(i, path_to_file){
@@ -83,11 +85,9 @@ d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
 ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
 ```
 
-**Supplementary Figure 1:** Bias and standard deviation of matching estimators when the number of covariates, p, is 50. 
+**Supplementary Figure 1:** Bias and standard deviation of matching estimators when the number of covariates is increased. All simulation parameters are the same as described in Section 4.2, except that the number of covariates, $p$, is increased to 50. This added several more covariates of random noise which did not influence treatment assignment or outcome. 
 
 \pagebreak
-
-# Supplementary Figure 2
 
 ```{r}
 read_data_1000 <- function(i, path_to_file){
@@ -135,11 +135,10 @@ b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation , group = k, color = k
 b
 ```
 
-**Supplementary Figure 2:** Standard deviation from matching estimators when overlap between treated and control individuals is poor.  Simulations were carried out as described in Section 4.1, but with $\phi(X_i) = X_{i1} - 10/3$.  This kept the sample size and number of treated individuals constant while increasing the separation of treated and control individuals.
+**Supplementary Figure 2:** Standard deviation from matching estimators when overlap between treated and control individuals is poor.  Simulations were carried out as described in Section 4.2, but with $\phi(X_i) = X_{i1} - 10/3$.  This kept the sample size and number of treated individuals constant while increasing the separation of treated and control individuals.
 
 \pagebreak
 
-# Supplementary Figure 3
 
 ```{r}
 dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/sigma_2/nsim_1000/")) %>% bind_rows()
@@ -199,4 +198,4 @@ ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labe
 
 ```
 
-**Supplementary Figure 3:** MSE and median gamma design sensitivity when the random noise contributing to the outcome is increased.  All simulation parameters are the same as described in Section 4.1, except that $\sigma = 2$ This increases the difficulty of fitting the prognostic score, diminishing the relative performance of pilot matching in terms of MSE and sensitivity.
+**Supplementary Figure 3:** MSE and median gamma design sensitivity when the random noise contributing to the outcome is increased.  All simulation parameters are the same as described in Section 4.2, except that $\sigma = 2$ This increases the difficulty of fitting the prognostic score, diminishing the relative performance of pilot matching in terms of MSE and sensitivity.
