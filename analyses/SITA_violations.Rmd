@@ -1,0 +1,182 @@
+---
+title: "Simulations with SITA Violation"
+author: "Rachael Caelie (Rocky) Aikens"
+date: "2/13/2020"
+output: pdf_document
+---
+
+```{r setup, warning=FALSE, message = FALSE, include = FALSE}
+knitr::opts_chunk$set(cache=FALSE, warning = FALSE, message = FALSE, echo = FALSE, fig.align = "center", fig.height = 4)
+require(ggplot2)
+require(dplyr)
+require(gridExtra)
+require(ggpubr)
+theme_set(theme_light())
+source("../code/basic_sim_functions.R")
+source("../code/SITA_violation_functions.R")
+```
+
+# Set Up with SITA violations
+
+We compare the performance of propensity score matching, Mahalanobis distance matching, and Buffalo Matching (described in the previous section) on simulated data, varying the dimensionality of the problem, the fixed treatment to control ratio during matching, and the correlation between the true propensity and prognostic score. For this set of simulations, we also add a weak, unobserved confounder, U. 
+\begin{align*}
+    X_i &\sim_{iid} \text{Normal}(0,I_p),\\
+    T_i &\sim_{iid} \text{Bernoulli}\left(\frac{1}{1+\exp(-\phi(X_i))}\right),\\
+    Y_i &=\tau T_i + \Psi(X_i) + \epsilon_i,\\
+    \epsilon_i &\sim_{iid} N(0,\sigma^2),
+\end{align*}
+where the true propensity and prognositic scores are given by the linear combinations
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3 - \nu U c,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2} + \nu U,
+\end{align*}
+The constant, $c$ in the propensity score formula was chosen such that there were approximately 100 treated observations in each dataset. For the simulations reported in the main figures of the paper, we let $c = 3$. We consider $p=10$, $\rho = 0, 0.1,\hdots, 0.9, 1.0,$ and $k=1,\hdots, 10$. Each simulation consisted of a dataset of size $n=2000$ and was repeated $N=1000$ times.
+We fix the treatment effect to be constant with $\tau=1$ and the noise to be $\sigma=1$.
+For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ using the permutation $t$-statistic from the package `sensitivtymv`
+
+\pagebreak
+
+# Fisher-Mill Visualizations
+
+This set-up is a little weird.  Here are some Fisher-Mill plots of the resulting data:
+
+```{r}
+nu = 0.1
+
+FM_plot_xSITA <- function(data, rho, nu = 0.2, title = ""){
+  plt_data <- data %>%
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2 + nu * U,
+           prop = mu,
+           t = as.factor(abs(1-t)),
+           a = ifelse(t == 1, 0.9, 1)) %>%
+    dplyr::select(c(t, prog, prop, a))
+  
+  plt <- ggplot(data = plt_data, aes( x = prop, y = prog, group = t, color = t)) + 
+    geom_point(size = 1, aes(alpha = a)) +
+    scale_color_brewer(palette="Set1") +
+    theme(legend.position = "none", aspect.ratio=1, plot.title = element_text(hjust = 0.5, size = 12))+
+    ggtitle(title) +
+    ylab(expression(paste("Prognostic Score, ", Psi, "(x)", sep = ""))) +
+    xlab("Propensity Score, logit(e(x))")
+  
+  return(plt)
+}
+```
+
+```{r, fig.height=4, fig.width=8}
+a <- FM_plot_xSITA(generate_xSITA_data(true_mu = "X1/3-3", nu = nu), rho = 0, title = "rho = 0")
+b <- FM_plot_xSITA(generate_xSITA_data(true_mu = "X1/3-3", nu = nu), rho = 0.5, title = "rho = 0.5")
+c <- FM_plot_xSITA(generate_xSITA_data(true_mu = "X1/3-3", nu = nu), rho = 0.9, title = "rho = 0.9")
+ggarrange(a,b,c, ncol = 3)
+```
+
+But there's something sinister going on here.  Suppose we fit the best possible model for propenisity and prognostic score.  That is, our coefficients for X1 and X2 in our propensity and prognostic models are exactly correct, but we leave out $U$ in the model because we never observed it. The plots below show the matches we might choose in this scenario under Mahalanobis, Propensity, and Joint Propensity and Prognostic score matching.  As you can see, we are missing some amount of variation between matched individuals.
+
+```{r}
+match_viz_xSITA <- function(data, match, rho, nu, k = 1, title = "Matching"){
+  plt_data <- data %>% 
+    mutate(m = match) %>%
+    mutate(a = ifelse (is.na(m), 0.9, 1)) %>% 
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2 + nu * U, 
+           prop = mu,
+           t = as.factor(abs(1-t))) %>%
+    dplyr::select(c(t, prog, prop, m, a))
+  
+  m_data <- plt_data %>% 
+    filter(!is.na(m)) %>%
+    arrange(m, desc(t)) %>% 
+    mutate(id = rep(1:(k + 1), sum(data$t))) %>%
+    dplyr::select(-c(t, a)) %>%
+    group_by(m) %>%
+    summarize(prop1 = first(prop), prop2 = last(prop),
+              prog1 = first(prog), prog2 = last(prog)) %>%
+    dplyr::select(prog1, prog2, prop1, prop2)
+  
+  plt <- ggplot(data = plt_data, aes( x = prop, y = prog, group = t, color = t)) + 
+    geom_point(aes(alpha = a), size = 1)+
+    scale_color_brewer(palette="Set1") +
+    geom_segment(data = m_data, 
+                 aes(x = prop1, y = prog1,
+                     xend = prop2, yend = prog2),
+                 color =  "black", group = NA, linetype = "dashed") +
+    ggtitle( title)+
+    theme(legend.position = "none", aspect.ratio=1, plot.title = element_text(hjust = 0.5, size = 9))+
+    ylab(expression(paste(Psi, "(x)", sep = ""))) +
+    xlab(expression(paste(phi, "(x)", sep = "")))
+  
+  return(plt)
+}
+
+# like prognostic match except returns data frame and match assignments, not just the
+# reformatted dataframe of outcomes by match assignment
+prognostic_match_assignment_xSITA <- function(df, propensity, match_assignment, prog_model, n_control) {
+  df$m <- match_assignment
+  df$row <- 1:nrow(df)
+  n_t<- sum(df$t)
+
+  selected <- df %>% 
+    filter(!is.na(m)) %>%
+    filter(t==0) %>%
+    group_by(m) %>%
+    sample_n(size = 1)
+  
+  prognostic <- lm(y ~ . - mu - t - row - m - U, data = selected)
+  not_selected <- df[-selected$row, ]
+  not_selected <- not_selected %>% 
+			mutate(progscore = predict(prognostic, not_selected)) %>%
+			mutate(propscore = predict(propensity, not_selected))
+  prog_dist <- match_on(t ~ progscore + propscore, data = not_selected)
+  prog_match <- pairmatch(prog_dist, controls = n_control, data = not_selected) 
+  return(list(df = not_selected, match = prog_match, k = n_control))
+}
+```
+
+
+```{r}
+rho <- 0.5
+#simulate data
+df <- generate_xSITA_data(N = 2000, p = 10, true_mu = "X1/3-3", nu = nu, rho = rho, sigma = 1)
+k = 1
+prop_model = formula(t ~ . - mu - y - U)
+prog_model = formula(y ~ . - mu - t - U)
+
+# mahalanobis match
+mahal_dist <- match_on(prop_model, method = "mahalanobis", data = df)
+m_match <- pairmatch(mahal_dist, controls = k, df)
+```
+
+```{r}
+#Calculate best possible propensity and prognostic scores, and match on those
+oracle_df <- df %>% 
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = 1/(1+exp(-(mu - nu * U))))
+
+oracle_prop_match <- pairmatch(t ~ prop, controls = k, oracle_df)
+oracle_prog_match <- pairmatch(t ~ prog + prop, controls = k, oracle_df)
+```
+
+If we made Fisher Mill plots from our scores and matched on them, this what we'd see:
+
+```{r,  fig.width=8, fig.height= 3}
+naive_df <- df %>%
+  mutate(mu = mu - nu * U)
+
+a <- match_viz_xSITA(naive_df, m_match, rho, nu = 0, title = "Mahalanobis Match")
+b <- match_viz_xSITA(naive_df, oracle_prop_match, rho, nu = 0, title = "Best Propensity Match")
+c <- match_viz_xSITA(naive_df, oracle_prog_match, rho, nu = 0, title = "Best Propensity x Prognosis Match")
+
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+```
+
+
+But of course, the Fisher-Mill plots we make and the matches we select are missing the unobserved confounder, U.  If we made true Fisher-Mill plots based on the data generating functions, we'd see that the above matching scheme is not doing as well as we thought.
+
+
+```{r, fig.width=8, fig.height= 3}
+a <- match_viz_xSITA(df, m_match, rho, nu, title = "Mahalanobis Match")
+b <- match_viz_xSITA(df, oracle_prop_match, rho, nu, title = "Best Propensity Match")
+c <- match_viz_xSITA(df, oracle_prog_match, rho, nu, title = "Best Propensity x Prognosis Match")
+
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+```
+

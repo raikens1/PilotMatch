@@ -98,7 +98,7 @@ prognostic_match <- function(df, propensity, match_assignment, prog_model, n_con
     sample_n(size = 1) %>%
     ungroup()
   
-  prognostic <- lm(y ~ . - mu - t, data = dplyr::select(selected, -c(row, m)))
+  prognostic <- lm(prog_model, data = dplyr::select(selected, -c(row, m)))
   not_selected <- df[-selected$row, ]
   not_selected <- not_selected %>% 
 			mutate(progscore = predict(prognostic, not_selected)) %>%

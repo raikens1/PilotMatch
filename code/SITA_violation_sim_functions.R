@@ -1,0 +1,45 @@
+require("optmatch")
+require(dplyr)
+require(magrittr)
+require(ggplot2)
+require(rlang)
+require(tidyr)
+require(sensitivitymw)
+require(tidyselect)
+require(bindrcpp)
+require(sensitivityfull)
+
+#' @title Generate simulated data with a SITA violation
+#' @description Data set contains measured covariates X, unmeasured covariate U, 
+#' outcome Y, treatment assignment t, and logit(propensity), mu.
+#' 
+#' covariate data ~ normal(0,1); mu = true_mu + 0.2 * U; 
+#'              t ~ binom(p = 1/(1+exp(-mu))); 
+#'              y ~ rho * X1 + sqrt(1-rho^2) * X2 + t + epsilon
+#'              epsilon ~ normal(0, 1)
+#'              
+#' @param N numeric, sample size
+#' @param p numeric, number of features
+#' @param true_mu string formula giving true propensity score linear model
+#' @param rho numeric between 0 and 1.  0 => prog orthogonal to prop, 1=> prog || prop
+#' @param nu coefficient of unmeasured confounder in propensity and prognosis
+#' @param sigma numeric noise to be added to y. y += sigma*rnorm(0,1)
+#' @param tau numeric additive treatment effect
+#' @return data.frame of covariates, y, t, and mu
+generate_xSITA_data <- function(N = 2000,
+                          p = 10,
+                          true_mu = "X1/3-3", 
+                          rho = 0,
+                          nu = 0.2,
+                          sigma = 1,
+                          tau = 1) {
+  df <- data.frame(matrix(rnorm(p * N), ncol = p)) %>%
+    mutate(U = rnorm(N))
+    
+  df <- df %>% mutate(mu = !!parse_quosure(true_mu) + nu * U)
+  df <- df %>% mutate(t = rbinom(n = N, size = 1, prob = 1/(1+exp(-mu))))
+  df <- df %>% mutate(y = tau*t + rho*X1 + sqrt(1-rho^2)*X2)
+  noise <- rnorm(N)
+  df$y <- df$y + sigma*noise
+  return(df)
+}
