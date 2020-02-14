@@ -1,0 +1,427 @@
+---
+title: "Bias Variance Tuning"
+author: "Rachael Caelie (Rocky) Aikens"
+date: "5/1/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, warning=FALSE, message = FALSE, include = FALSE}
+knitr::opts_chunk$set(cache=FALSE, warning = FALSE, message = FALSE, echo = FALSE, fig.align = "center", fig.height = 4)
+require(ggplot2)
+require(dplyr)
+require(gridExtra)
+require(ggpubr)
+theme_set(theme_light())
+source("../code/basic_sim_functions.R")
+```
+
+# Set Up 
+
+We compare the performance of propensity score matching, Mahalanobis distance matching, and Buffalo Matching (described in the previous section) on simulated data, varying the dimensionality of the problem, the fixed treatment to control ratio during matching, and the correlation between the true propensity and prognostic score. The generative model for all of our simulations is the following:
+\begin{align*}
+    X_i &\sim_{iid} \text{Normal}(0,I_p),\\
+    T_i &\sim_{iid} \text{Bernoulli}\left(\frac{1}{1+\exp(-\phi(X_i))}\right),\\
+    Y_i &=\tau T_i + \Psi(X_i) + \epsilon_i,\\
+    \epsilon_i &\sim_{iid} N(0,\sigma^2),
+\end{align*}
+where the true propensity and prognositic scores are given by the linear combinations
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3 - c,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+so that $\text{Cor}(\phi(X_i), \Psi(X_i)) \propto \rho$.  The constant, $c$ in the propensity score formula was chosen such that there were approximately 100 treated observations in each dataset. For the simulations reported in the main figures of the paper, we let $c = 3$. We consider $p=10$, $\rho = 0, 0.1,\hdots, 0.9, 1.0,$ and $k=1,\hdots, 10$. Each simulation consisted of a dataset of size $n=2000$ and was repeated $N=1000$ times.
+We fix the treatment effect to be constant with $\tau=1$ and the noise to be $\sigma=1$.
+For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ using the permutation $t$-statistic from the package `sensitivtymv`
+
+\pagebreak
+
+# Primary simulations from paper
+
+Just to be explicit, the primary simulations in our paper rely on the following formulations of $\phi$ and $\psi$.
+
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3 - 3,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+A valid question to ask is: what is the overlap between treated and control individuals in this set-up?  We can interrogate that with Fisher-Mill plots and histograms
+
+```{r}
+FM_plot <- function(data, rho, title = ""){
+  plt_data <- data %>%
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = mu,
+           t = as.factor(abs(1-t)),
+           a = ifelse(t == 1, 0.9, 1)) %>%
+    dplyr::select(c(t, prog, prop, a))
+  
+  plt <- ggplot(data = plt_data, aes( x = prop, y = prog, group = t, color = t)) + 
+    geom_point(size = 1, aes(alpha = a)) +
+    scale_color_brewer(palette="Set1") +
+    theme(legend.position = "none", aspect.ratio=1, plot.title = element_text(hjust = 0.5, size = 12))+
+    ggtitle(title) +
+    ylab(expression(paste("Prognostic Score, ", Psi, "(x)", sep = ""))) +
+    xlab("Propensity Score, logit(e(x))")
+  
+  return(plt)
+}
+
+overlap_histogram <- function(data, rho = 0){
+    plt_data <- data %>% 
+      mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = mu,
+           t = as.factor(abs(1-t))) %>%
+      select(c(t, prog, prop))
+    
+    ggplot(plt_data, aes(x = prop, fill = t)) +
+      scale_fill_brewer(palette = "Set1") +
+      geom_histogram(alpha = 0.4, position = "identity")
+}
+```
+
+```{r, fig.height=4, fig.width=8}
+a <- FM_plot(generate_data(true_mu = "X1/3-3"), rho = 0, title = "rho = 0")
+b <- FM_plot(generate_data(true_mu = "X1/3-3"), rho = 0.5, title = "rho = 0.5")
+c <- FM_plot(generate_data(true_mu = "X1/3-3"), rho = 0.9, title = "rho = 0.9")
+ggarrange(a,b,c, ncol = 3)
+```
+```{r fig.height=3, fig.width=5}
+overlap_histogram(generate_data(true_mu = "X1/3-3"))
+```
+
+Inessence, overlap is quite good in this scenario.
+
+For reference, the performance of each method under this formulation is given below.  These are essentially figures 2 and 3 of the existing paper:
+
+```{r}
+read_data_1000 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/mu_x1_over_3_minus_3/nsim_1000/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=10.5, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, c, d, ncol = 1, common.legend = TRUE, legend = "right")
+```
+
+\pagebreak
+
+# Phi = X1 - 10/3
+
+As it turns out, we've already run a batch of simulations with worse overlap, and the standard deviations for each method under these simulation parameters is already in Supplementary figure 2. Inessence, all that was changed is that the weight of the covariate $X_1$ in the propensity formula was increased, meaning that the baseline covariates more strongly determine treatment effect:
+
+\begin{align*}
+    \phi(X_i) &= X_{i1} - 10/3,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+Note that the constant in the propensity score formula was increased slightly to ensure that there were still approximately 100 treated individuals in each simulated data set.  The FM plots and overlap histograms for some sample data sets are shown below:
+
+```{r, fig.height=4, fig.width=8}
+a <- FM_plot(generate_data(true_mu = "X1-10/3"), rho = 0, title = "rho = 0")
+b <- FM_plot(generate_data(true_mu = "X1-10/3"), rho = 0.5, title = "rho = 0.5")
+c <- FM_plot(generate_data(true_mu = "X1-10/3"), rho = 0.9, title = "rho = 0.9")
+ggarrange(a,b,c, ncol = 3)
+```
+
+```{r fig.height=3, fig.width=5}
+overlap_histogram(generate_data(true_mu = "X1-10/3"))
+```
+
+And here we see the performance:
+
+```{r}
+read_data_1000 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/mu_x1_minus_10_3rds/nsim_1000/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- dat %>% mutate(
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>%
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=10.5, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation , group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, c, d, ncol = 1, common.legend = TRUE, legend = "right")
+```
+
+I make the following observations:
+
+1. *Bias is much higher when rho is large* - bias goes up to 0.4 when rho is large, whereas in the main simulation bias never rose above 0.2, and was even lower (0.05) for propensity and joint matching.  I suppose this is because when the overlap is worse the matches to the treatment group are worse in terms of propensity score (and prognostic score).  This gives more severe bias, especially when there is more confounding in the data set.
+2. *Standard deviation gets much worse for larger rho and k* - we mention this in the main text, and speculate that when prognosis and treatment are highly correllated and overlap is poor, treated individuals are matched with worse prognostic matches.  Since prognostic balance in the data set is then poor, you see higher variance in addition to bias. 
+3. *Gammas are much higher across the board, and they get increasingly large with rho* - This makes sense because bias is way higher.  As it turns out, the difference in gamma between propensity score matching and joint matching is about the same as in our main simulations (at least for rho ~ 0).  It just looks like the benefit is smaller because gamma is getting so big and changing the scale of the graphs.
+
+
+\pagebreak
+
+# Some intermediate simulations
+
+I happen to have run these at one point, so I thought I'd throw them in.  Each one has some level of overlap between the simulations shown in the paper and the ones in the previous section.
+
+## Phi = X1/2 - 3
+
+Suppose we switch to the following model:
+
+\begin{align*}
+    \phi(X_i) &= X_{i1}/2 - 3,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+Now our overlap is as below:
+
+```{r, fig.height=4, fig.width=8}
+a <- FM_plot(generate_data(true_mu = "X1/2-3"), rho = 0, title = "rho = 0")
+b <- FM_plot(generate_data(true_mu = "X1/2-3"), rho = 0.5, title = "rho = 0.5")
+c <- FM_plot(generate_data(true_mu = "X1/2-3"), rho = 0.9, title = "rho = 0.9")
+ggarrange(a,b,c, ncol = 3)
+```
+
+```{r fig.height=3, fig.width=5}
+overlap_histogram(generate_data(true_mu = "X1/2-3"))
+```
+
+```{r}
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/mu_X1_over_2_minus_3/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=10.5, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, c, d, ncol = 1, common.legend = TRUE, legend = "right")
+```
+
+
+\pagebreak
+
+
+## Phi = 3X1/4 - 3.2
+
+Suppose we switch to the following model:
+
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3 - 3,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+
+Now this:
+```{r, fig.height=4, fig.width=8}
+a <- FM_plot(generate_data(true_mu = "3*X1/4-3.2"), rho = 0, title = "rho = 0")
+b <- FM_plot(generate_data(true_mu = "3*X1/4-3.2"), rho = 0.5, title = "rho = 0.5")
+c <- FM_plot(generate_data(true_mu = "3*X1/4-3.2"), rho = 0.9, title = "rho = 0.9")
+ggarrange(a,b,c, ncol = 3)
+```
+
+```{r fig.height=3, fig.width=5}
+overlap_histogram(generate_data(true_mu = "3*X1/4-3.2"))
+```
+
+```{r}
+read_data <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_10", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/3X1_over_4_minus_32/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- dat %>% mutate(squared_err = (estimate-true_tau)**2, k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=10.5, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, c, d, ncol = 1, common.legend = TRUE, legend = "right")
+```
