@@ -96,7 +96,7 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10,
 }
 
 run_sim(rho = rho, p = p, nsim = nsim, 
-        out_file = out_file, true_mu = true_mu, 
+        out_file = out_file, true_mu = true_mu, nu = nu,
         sigma = sigma, tau = tau, ks = ks, N = N,
         prog_model = prog_model, prop_model = prop_model,
         full = full)
