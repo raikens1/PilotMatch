@@ -9,7 +9,7 @@ require(tidyselect, quietly = T)
 require(bindrcpp, quietly = T)
 require(sensitivityfull, quietly = T)
 
-source("../code/basic_sim_functions.r")
+source("../code/basic_sim_functions.R")
 
 #' @title simulate full match
 #' @param df, a data.frame from generate_data
