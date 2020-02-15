@@ -1,0 +1,70 @@
+Loading required package: optmatch
+Loading required package: survival
+The optmatch package has an academic license. Enter relaxinfo() for more information.
+Loading required package: dplyr
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+Loading required package: magrittr
+Loading required package: ggplot2
+Loading required package: rlang
+
+Attaching package: ‘rlang’
+
+The following object is masked from ‘package:magrittr’:
+
+    set_names
+
+Loading required package: tidyr
+
+Attaching package: ‘tidyr’
+
+The following object is masked from ‘package:magrittr’:
+
+    extract
+
+Loading required package: sensitivitymw
+Loading required package: tidyselect
+Loading required package: bindrcpp
+Loading required package: sensitivityfull
+********************
+Simulation parameters:
+N: 2000
+Rho: 0.2
+p: 10
+nsim: 10
+true_mu: X1/3 - 3
+nu: 0.1
+sigma: 1
+tau: 1
+full: FALSE
+********************
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+********************
+Simulations complete:
+********************
+output file: xSITA_results_2_10_10_nu_0.1
+Time elapsed:
+   user  system elapsed 
+410.771   6.762 450.023 
+410.7716.762450.02300
+********************
+[1] 1
+There were 42 warnings (use warnings() to see them)

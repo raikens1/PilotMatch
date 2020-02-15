@@ -13,7 +13,7 @@ require(gridExtra)
 require(ggpubr)
 theme_set(theme_light())
 source("../code/basic_sim_functions.R")
-source("../code/SITA_violation_functions.R")
+source("../code/SITA_violation_sim_functions.R")
 ```
 
 # Set Up with SITA violations
@@ -179,4 +179,78 @@ c <- match_viz_xSITA(df, oracle_prog_match, rho, nu, title = "Best Propensity x 
 
 ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
 ```
+
+# Tuning Simulations
+
+
+```{r}
+read_data_10 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "xSITA_results_",i,"_10_10_nu_1", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data_10(x, "../data/SITA_violations/tuning/")) %>% bind_rows
+```
+
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = mean(estimate) - true_tau, 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Pilot"))
+```
+
+
+```{r}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+```
+
+```{r, fig.width=8.5, fig.height=6}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  ylab("Standard Deviation")+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+```
+
 

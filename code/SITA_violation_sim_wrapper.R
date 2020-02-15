@@ -25,7 +25,7 @@ tau <- 1
 ks <- c(1, 2, 3, 5)
 N <- 2000
 full <- F
-nu <- 0.1
+nu <- 0.2
 prop_model <- formula(t ~ . - mu - y - U) 
 prog_model <- formula(y ~ . - mu - t - U)
 
@@ -66,7 +66,7 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10,
                                                                 true_mu = true_mu, nu = nu,
                                                                 sigma = sigma, tau = tau),
                                             prop_model = prop_model,
-                                            prog_model = progn_model,
+                                            prog_model = prog_model,
                                             verbose = TRUE, ks = ks),
                          simplify = FALSE) %>% 
       bind_rows()

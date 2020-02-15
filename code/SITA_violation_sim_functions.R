@@ -1,13 +1,13 @@
-require("optmatch")
-require(dplyr)
-require(magrittr)
-require(ggplot2)
-require(rlang)
-require(tidyr)
-require(sensitivitymw)
-require(tidyselect)
-require(bindrcpp)
-require(sensitivityfull)
+require("optmatch", quietly = T)
+require(dplyr, quietly = T)
+require(magrittr, quietly = T)
+require(ggplot2, quietly = T)
+require(rlang, quietly = T)
+require(tidyr, quietly = T)
+require(sensitivitymw, quietly = T)
+require(tidyselect, quietly = T)
+require(bindrcpp, quietly = T)
+require(sensitivityfull, quietly = T)
 
 #' @title Generate simulated data with a SITA violation
 #' @description Data set contains measured covariates X, unmeasured covariate U, 
