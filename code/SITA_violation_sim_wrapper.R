@@ -22,7 +22,7 @@ nsim <- as.numeric(args[3])
 true_mu <- "X1/3 - 3"
 sigma <- 1
 tau <- 1
-ks <- c(1, 2, 3, 5)
+ks <- 1:10
 N <- 2000
 full <- F
 nu <- 1

@@ -185,13 +185,13 @@ ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
 
 ```{r}
 read_data_10 <- function(i, path_to_file){
-  filename <- paste(path_to_file, "xSITA_results_",i,"_10_10_nu_1", sep = "")
+  filename <- paste(path_to_file, "xSITA_results_",i,"_10_10_nu_10", sep = "")
   dat <- read.csv(filename) %>%
     mutate(rho = i/10)
   return(dat)
 }
 
-dat <- lapply(1:10, function(x) read_data_10(x, "../data/SITA_violations/tuning/")) %>% bind_rows
+dat <- lapply(1:10, function(x) read_data_10(x, "../data/SITA_violations/tuning/nu_10/")) %>% bind_rows
 ```
 
 
