@@ -41,7 +41,7 @@ For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ usin
 This set-up is a little weird.  Here are some Fisher-Mill plots of the resulting data:
 
 ```{r}
-nu = 0.1
+nu = 0.2
 
 FM_plot_xSITA <- function(data, rho, nu = 0.2, title = ""){
   plt_data <- data %>%
@@ -252,5 +252,79 @@ ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labe
 ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
 
 ```
+
+
+# nu = 0.1
+
+```{r}
+read_data_1000 <- function(i, path_to_file, nu){
+  filename <- paste(path_to_file, "xSITA_results_",i,"_10_1000_nu_", nu * 10, sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/SITA_violations/nu_02/", 0.2)) %>% bind_rows
+```
+
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = mean(estimate) - true_tau, 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Pilot"))
+```
+
+
+```{r}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+```
+
+```{r, fig.width=8.5, fig.height=6}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  ylab("Standard Deviation")+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+```
+
 
 

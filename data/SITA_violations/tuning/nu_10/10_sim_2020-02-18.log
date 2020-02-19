@@ -1,0 +1,59 @@
+The optmatch package has an academic license. Enter relaxinfo() for more information.
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+
+Attaching package: ‘rlang’
+
+The following object is masked from ‘package:magrittr’:
+
+    set_names
+
+
+Attaching package: ‘tidyr’
+
+The following object is masked from ‘package:magrittr’:
+
+    extract
+
+********************
+Simulation parameters:
+N: 2000
+Rho: 1
+p: 10
+nsim: 10
+true_mu: X1/3 - 3
+nu: 1
+sigma: 1
+tau: 1
+full: FALSE
+********************
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+Completed One Simulation
+********************
+Simulations complete:
+********************
+output file: xSITA_results_10_10_10_nu_1
+Time elapsed:
+   user  system elapsed 
+666.847  11.138 743.350 
+666.84711.138743.3500
+********************
+[1] 1
+There were 42 warnings (use warnings() to see them)

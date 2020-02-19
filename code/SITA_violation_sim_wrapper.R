@@ -25,7 +25,7 @@ tau <- 1
 ks <- c(1, 2, 3, 5)
 N <- 2000
 full <- F
-nu <- 0.2
+nu <- 1
 prop_model <- formula(t ~ . - mu - y - U) 
 prog_model <- formula(y ~ . - mu - t - U)
 
