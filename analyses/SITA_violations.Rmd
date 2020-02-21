@@ -41,7 +41,7 @@ For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ usin
 This set-up is a little weird.  Here are some Fisher-Mill plots of the resulting data:
 
 ```{r}
-nu = 0.2
+nu = 0.5
 
 FM_plot_xSITA <- function(data, rho, nu = 0.2, title = ""){
   plt_data <- data %>%
@@ -180,18 +180,112 @@ c <- match_viz_xSITA(df, oracle_prog_match, rho, nu, title = "Best Propensity x 
 ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
 ```
 
-# Tuning Simulations
 
+# Results with no SITA violation
 
 ```{r}
-read_data_10 <- function(i, path_to_file){
-  filename <- paste(path_to_file, "xSITA_results_",i,"_10_10_nu_10", sep = "")
+read_data_1000 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
   dat <- read.csv(filename) %>%
     mutate(rho = i/10)
   return(dat)
 }
 
-dat <- lapply(1:10, function(x) read_data_10(x, "../data/SITA_violations/tuning/nu_10/")) %>% bind_rows
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/mu_x1_over_3_minus_3/nsim_1000/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = mean(estimate) - true_tau, 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Pilot"))
+```
+
+
+```{r}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+```
+
+```{r, fig.width=8.5, fig.height=6}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  ylab("Standard Deviation")+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+```
+
+```{r fig.width=8.5, fig.height=6, echo = FALSE}
+p <- ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+ggsave("../figures/Figure2.pdf", p,  width=8.5, height=5.5)
+```
+
+Figure 1 shows the bias and variance of $1:k$ matching for each method on the same simulated data set as $k$ increases (colored lines) and the correllation of propensity and prognosis, $\rho$ increases from left to right.  When $\rho = 0$, the treatment effect is completely unconfounded, since treatment is entirely determined (up to randomness) by variation in $X_{i1}$, and outcome (under the control assignment) is entirely determined by variation in $X_{i2}$.  When $\rho = 1$, the data is highly confounded, since outcome and treatment assignment are both determined solely by variation in $X_{i1}$. 
+
+A first observation is that the bias from Mahalanobis distance matching is large, and it increases with the correllation between prognosis and treatment assignment (Figure 1A). This is probably because, as $\rho$ approaches 1, only a single covariate, $X_{i1}$ is important to match on, yet Mahalanobis distance considers 9 other covariates which are entirely random noise unimportant to the problem. It thus selects worse matches with respect to the true covariate of interest. This problem is exacerbated when the number of uninformative covariates is increased (Supplementary Figure 3).
+
+Figure 1B shows the protective effect of pilot matching against the variance of the estimator.  Propensity score matching has highest variance, and this is worse when $\rho$ is close to zero.  This is because, when $\rho$ is small, the propensity score contains no information about prognosis under the control assignment.  This causes the propensity score method to match observations which may be very different in terms of their potential outcome under the control assignment, giving poor prognostic balance and thus larger variance in the estimate of the causal effect.  While Mahalanobis distance performs slightly better, it is again choosing lower quality matches because of the uninformative covariates in the data. The lowest variance is achieved by pilot matching, since this algorithm optimizes for prognostic balance as well as propensity score balance.
+
+```{r fig.width=8.5, fig.height=6, echo = FALSE}
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+```
+
+```{r fig.width=8.5, fig.height=6, echo = FALSE}
+p <- ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+ggsave("../figures/Figure3.pdf", p,  width=8.5, height=5.5)
+```
+
+Figure 2 shows the mean squared error and median gamma sensitivity from the same set of simulations as above.  Figure 2A demonstrates that pilot matching does well compared to the other two methods in terms of mean squared error, because of the protection against bias and variance shown in figure 1. Figure 2B shows the protective effect of prognostic balance against unobserved confounding.  Propensity score matching gives lowest $\Gamma$ values, especially when $\rho$ is small. When this happens, the propensity score contains no prognostically relevant covariates, so the matches produced have poor prognostic balance.  As $\rho$ increases, the prognostic score and the propensity score become highly correllated, so matching on propensity score starts to give some prognostic balance as well as propensity balance.  While the Gamma sentistivity of Mahalanobis distance matching seems promising when $\rho$ is large, most of this is likely due to the large amount of bias in the effect estimate from this method (Figure 1A).  Because pilot matching directly attempts to achieve prognostic balance in the matched sets, the pilot matching method has better protection against unobserved confounding, without giving a highly biased estimator.
+
+
+
+# nu = 0.1
+
+```{r}
+read_data_1000 <- function(i, path_to_file, nu){
+  filename <- paste(path_to_file, "xSITA_results_",i,"_10_1000_nu_", nu * 10, sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/SITA_violations/nu_01/", 0.1)) %>% bind_rows
 ```
 
 
@@ -254,17 +348,159 @@ ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labe
 ```
 
 
-# nu = 0.1
+
+
+
+# nu = 0.2
 
 ```{r}
-read_data_1000 <- function(i, path_to_file, nu){
-  filename <- paste(path_to_file, "xSITA_results_",i,"_10_1000_nu_", nu * 10, sep = "")
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/SITA_violations/nu_02/", 0.2)) %>% bind_rows
+```
+
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = mean(estimate) - true_tau, 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Pilot"))
+```
+
+
+```{r}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+```
+
+```{r, fig.width=8.5, fig.height=6}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  ylab("Standard Deviation")+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+```
+
+
+
+
+
+
+
+
+# nu = 0.5
+
+```{r}
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/SITA_violations/nu_05/", 0.5)) %>% bind_rows
+```
+
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = mean(estimate) - true_tau, 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Pilot"))
+```
+
+
+```{r}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+```
+
+```{r, fig.width=8.5, fig.height=6}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  ylab("Standard Deviation")+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+
+ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+```
+
+
+# Tuning Simulations
+
+
+```{r}
+read_data_10 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "xSITA_results_",i,"_10_10_nu_10", sep = "")
   dat <- read.csv(filename) %>%
     mutate(rho = i/10)
   return(dat)
 }
 
-dat <- lapply(1:10, function(x) read_data_1000(x, "../data/SITA_violations/nu_02/", 0.2)) %>% bind_rows
+dat <- lapply(1:10, function(x) read_data_10(x, "../data/SITA_violations/tuning/nu_10/")) %>% bind_rows
 ```
 
 

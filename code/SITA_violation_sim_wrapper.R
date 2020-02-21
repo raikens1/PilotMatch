@@ -22,10 +22,10 @@ nsim <- as.numeric(args[3])
 true_mu <- "X1/3 - 3"
 sigma <- 1
 tau <- 1
-ks <- 1:10
+ks <- c(1,2,3,5)
 N <- 2000
 full <- F
-nu <- 0.2
+nu <- 0.4
 prop_model <- formula(t ~ . - mu - y - U) 
 prog_model <- formula(y ~ . - mu - t - U)
 

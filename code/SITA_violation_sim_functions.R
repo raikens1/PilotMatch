@@ -38,7 +38,7 @@ generate_xSITA_data <- function(N = 2000,
     
   df <- df %>% mutate(mu = !!parse_quosure(true_mu) + nu * U)
   df <- df %>% mutate(t = rbinom(n = N, size = 1, prob = 1/(1+exp(-mu))))
-  df <- df %>% mutate(y = tau*t + rho*X1 + sqrt(1-rho^2)*X2)
+  df <- df %>% mutate(y = tau*t + rho*X1 + sqrt(1-rho^2)*X2 + nu * U)
   noise <- rnorm(N)
   df$y <- df$y + sigma*noise
   return(df)
