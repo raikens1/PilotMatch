@@ -35,7 +35,7 @@ simulate_pairmatch <- function(df,
   propensity <- glm(prop_model, family = binomial(), data = df)
   
   f <- function(k){ 
-    prop_match <- pairmatch(propensity, controls = k, df)
+    prop_match <- pairmatch(propensity, controls = k, data = df)
     return(reformat(df, prop_match, k))
   }
   ndfs <- sapply(ks, f, simplify = FALSE)

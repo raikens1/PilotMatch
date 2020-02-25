@@ -15,7 +15,7 @@ require(sensitivityfull, quietly = T)
 #' 
 #' covariate data ~ normal(0,1); mu = true_mu + 0.2 * U; 
 #'              t ~ binom(p = 1/(1+exp(-mu))); 
-#'              y ~ rho * X1 + sqrt(1-rho^2) * X2 + t + epsilon
+#'              y ~ rho * X1 + sqrt(1-rho^2) * X2 + 0.2*U + t + epsilon
 #'              epsilon ~ normal(0, 1)
 #'              
 #' @param N numeric, sample size
