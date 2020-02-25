@@ -21,7 +21,7 @@ nsim <- as.numeric(args[3])
 # defaults
 true_mu <- "X1/3 - 3"
 sigma <- 1
-true_tau <- "1 + rnorm(N, sd = 0.25)"
+true_tau <- "1 + 0.25 * X3"
 ks <- 1:10
 N <- 2000
 full <- F
