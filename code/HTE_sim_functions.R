@@ -42,3 +42,9 @@ generate_data_HTE <- function(N = 2000,
   df$y <- df$y + sigma*noise
   return(df)
 }
+
+get_SATT <- function(df){
+  treated_df <- df %>% filter(t == 1)
+  
+  return(mean(treated_df$tau))
+}
