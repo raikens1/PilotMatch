@@ -1,0 +1,1 @@
+Note that on this EC2 instance I'm running simulations with a SITA violation and overspecified models in the usual way, but with the direction of confounding reversed so that the confounder masks the true treatment effect (i.e. people more likely to have the outcome are less likely to be treated).

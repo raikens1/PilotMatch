@@ -21,12 +21,12 @@ nsim <- as.numeric(args[3])
 # defaults
 true_mu <- "X1/3 - 3"
 sigma <- 1
-true_tau <- "1 + 0.25 * X3"
-ks <- 1:10
+true_tau <- "1 + 0.25 * X1"
+ks <- 1:5
 N <- 2000
 full <- F
-prop_model <- formula(t ~ . - mu - y - tau) 
-prog_model <- formula(y ~ . - mu - t - tau)
+prop_model <- formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10) 
+prog_model <- formula(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
 
 run_sim <- function(rho = 0.1, p = 10, nsim = 10,
                     out_file = "test_", true_mu = "X1/3 - 3", 
@@ -50,14 +50,6 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10,
   # simulate
   if (full){
     exit("fullmatching with HTE estimation is not yet supported")
-    results <- replicate(nsim, simulate_fullmatch(generate_data(N=N, rho=rho,
-                                                                p = p,
-                                                                true_mu = true_mu,
-                                                                sigma = sigma,
-                                                                tau = tau),
-                                      verbose = TRUE),
-                       simplify = FALSE) %>% 
-      bind_rows()
   } else {
     results <- replicate(nsim,
                          simulate_pairmatch(generate_data_HTE(N=N, rho=rho, p = p,
@@ -66,7 +58,7 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10,
                                                               true_tau = true_tau),
                                             prop_model = prop_model,
                                             prog_model = prog_model,
-                                            verbose = TRUE, ks = ks),
+                                            verbose = TRUE, ks = ks, HTE = T),
                          simplify = FALSE) %>% 
       bind_rows()
   }

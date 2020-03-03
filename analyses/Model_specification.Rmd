@@ -1,0 +1,287 @@
+---
+title: "Model Specification"
+author: "Rachael Caelie (Rocky) Aikens"
+date: "2/26/2020"
+output: pdf_document
+---
+
+```{r setup, warning=FALSE, message = FALSE, include = FALSE}
+knitr::opts_chunk$set( warning = FALSE, message = FALSE, echo = FALSE, fig.align = "center", fig.height = 4)
+require(dplyr)
+require(ggplot2)
+require(gridExtra)
+require(ggpubr)
+require(knitr)
+theme_set(theme_light())
+source("../code/basic_sim_functions.R")
+set.seed(123)
+```
+
+# Set Up 
+
+We compare the performance of propensity score matching, Mahalanobis distance matching, and pilot matching (described in the manuscript) on simulated data, varying the dimensionality of the problem, the fixed treatment to control ratio during matching, and the correlation between the true propensity and prognostic score. The generative model for all of our simulations is the following:
+\begin{align*}
+    X_i &\sim_{iid} \text{Normal}(0,I_p),\\
+    T_i &\sim_{iid} \text{Bernoulli}\left(\frac{1}{1+\exp(-\phi(X_i))}\right),\\
+    Y_i &=\tau T_i + \Psi(X_i) + \epsilon_i,\\
+    \epsilon_i &\sim_{iid} N(0,\sigma^2),
+\end{align*}
+where the true propensity and prognositic scores are given by the linear combinations
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3-c,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+so that $\text{Cor}(\phi(X_i), \Psi(X_i)) \propto \rho$.  The constant, $c$, in the propensity score formula was chosen such that there were approximately 100 treated observations in each dataset. We consider $p=10$, $\rho = 0, 0.1,\hdots, 0.9, 1.0,$ and $k=1,\hdots, 10$. Each simulation consisted of a dataset of size $n=2000$ and was repeated $N=1000$ times.
+We fix the treatment effect to be constant with $\tau=1$ and the noise to be $\sigma=1$.
+For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ using the permutation $t$-statistic from the package `sensitivtymv`.
+
+\pagebreak
+
+# Fisher-Mill Plots
+
+## An Oracle
+
+We're fairly familiar with this vizualization at this point.  The figure below supposes that we knew the propensity and prognostic score for each individual in our data set, and shows - in Fisher-Mill space - what the optimal matches for each approach would be.
+
+```{r}
+match_viz <- function(data, match, rho, k = 1, title = "Matching"){
+  plt_data <- data %>% 
+    mutate(m = match) %>%
+    mutate(a = ifelse (is.na(m), 0.9, 1)) %>% 
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = mu,
+           t = as.factor(abs(1-t))) %>%
+    dplyr::select(c(t, prog, prop, m, a))
+  
+  m_data <- plt_data %>% 
+    filter(!is.na(m)) %>%
+    arrange(m, desc(t)) %>% 
+    mutate(id = rep(1:(k + 1), sum(data$t))) %>%
+    dplyr::select(-c(t, a)) %>%
+    group_by(m) %>%
+    summarize(prop1 = first(prop), prop2 = last(prop),
+              prog1 = first(prog), prog2 = last(prog)) %>%
+    dplyr::select(prog1, prog2, prop1, prop2)
+  
+  plt <- ggplot(data = plt_data, aes( x = prop, y = prog, group = t, color = t)) + 
+    geom_point(aes(alpha = a), size = 1)+
+    scale_color_brewer(palette="Set1") +
+    geom_segment(data = m_data, 
+                 aes(x = prop1, y = prog1,
+                     xend = prop2, yend = prog2),
+                 color =  "black", group = NA, linetype = "dashed") +
+    ggtitle( title)+
+    theme(legend.position = "none", aspect.ratio=1, plot.title = element_text(hjust = 0.5, size = 9))+
+    ylab(expression(paste(Psi, "(x)", sep = ""))) +
+    xlab(expression(paste(phi, "(x)", sep = "")))
+  
+  return(plt)
+}
+
+overlap_histogram <- function(data){
+    plt_data <- data %>% 
+      mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = mu,
+           t = as.factor(abs(1-t))) %>%
+      dplyr::select(c(t, prog, prop))
+    
+    ggplot(plt_data, aes(x = prop, fill = t)) + geom_histogram(alpha = 0.4, position = "identity")
+}
+
+# like prognostic match except returns data frame and match assignments, not just the
+# reformatted dataframe of outcomes by match assignment
+prognostic_match_assignment <- function(df, propensity, match_assignment, prog_model, n_control) {
+  df$m <- match_assignment
+  df$row <- 1:nrow(df)
+  n_t<- sum(df$t)
+
+  selected <- df %>% 
+    filter(!is.na(m)) %>%
+    filter(t==0) %>%
+    group_by(m) %>%
+    sample_n(size = 1) 
+  
+  prognostic <- lm(prog_model, data = dplyr::select(selected, -c(row, m)))
+  not_selected <- df[-selected$row, ]
+  not_selected <- not_selected %>% 
+			mutate(progscore = predict(prognostic, not_selected)) %>%
+			mutate(propscore = predict(propensity, not_selected))
+  prog_dist <- match_on(t ~ progscore + propscore, data = not_selected)
+  prog_match <- pairmatch(prog_dist, controls = n_control, data = not_selected) 
+  return(list(df = not_selected, match = prog_match, k = n_control, model = prognostic))
+}
+```
+
+```{r}
+rho <- 0.5
+#simulate data
+df <- generate_data(N = 2000, p = 10, true_mu = "X1/3-3", rho = rho, sigma = 1)
+k = 1
+prop_model = formula(t ~ . - mu - y)
+prog_model = formula(y ~ . - mu - t)
+
+# mahalanobis match
+mahal_dist <- match_on(prop_model, method = "mahalanobis", data = df)
+m_match <- pairmatch(mahal_dist, controls = k, df)
+```
+
+
+```{r}
+#Calculate true propensity and prognostic score, and match on the true score
+oracle_df <- df %>% 
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = 1/(1+exp(-(mu))))
+
+oracle_prop_match <- pairmatch(t ~ prop, controls = k, oracle_df)
+oracle_prog_match <- pairmatch(t ~ prog + prop, controls = k, oracle_df)
+```
+
+```{r, fig.width=8, fig.height= 3}
+a <- match_viz(df, m_match, rho, title = "Mahalanobis Match")
+b <- match_viz(df, oracle_prop_match, rho, title = "True Propensity Match")
+c <- match_viz(df, oracle_prog_match, rho, title = "True Propensity x Prognosis Match")
+
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+```
+\pagebreak
+
+## An overspecified model
+
+Now lets suppose that we actually have to fit the propensity and prognostic score (i.e. we don't magically know them).  In the simulations we've run thus far, we've regressed on all 10 covariates for the prognostic and propensity score models.  This gives us substantially worse matches.
+
+```{r}
+# Build scores empirically for propensity and prognostic match
+
+# build propensity score
+propensity <- glm(prop_model, family = binomial(), data = df)
+  
+prop_match <- pairmatch(propensity, controls = k, df)
+  
+# 1:2 mahalanobis matching to select data to use for prognostic model
+mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
+  
+buff_match_assignment <- prognostic_match_assignment(df, propensity, mahal_match, as.formula(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10), k)
+```
+
+```{r, fig.width=8.2, fig.height= 3}
+a <- match_viz(df, m_match, rho, title = "Mahalanobis Match")
+b <- match_viz(df, prop_match, rho, title = "Estimated Propensity Match")
+c <- match_viz(buff_match_assignment$df, buff_match_assignment$match, rho, title = "Estimated Propensity x Prognosis Match")
+
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+```
+
+But, okay, a reasonable question to ask is: just how badly did we do in the model fitting?  Keep in mind that, with $\rho = 0.5$ as it does in these demonstrations, the correct models are:
+
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3-c,\\
+    \Psi(X_i) &= 0.5 X_{i1} + 0.866X_{i2},
+\end{align*}
+
+Below is a summary of our propensity and prognosis models.  One thing that's interesting is that the propensity model is - like - kind of awful and the prognostic model is quite good, in spite of the fact that the propensity model is fit on the entire data set while the prognostic model is fit on only 100 controls.  This may have something to do with the fact that the treatment is binary while the outcome is continuous.
+
+```{r}
+summary(buff_match_assignment$model)
+summary(propensity)
+```
+
+
+\pagebreak
+
+## A correctly specified model
+
+Let's do something crazy and give the propensity and prognosis models the correct specification. That is, the propensity model should regress `t ~ X1` and the prognostic model should regress `t ~ X1 + X2`
+
+```{r}
+# Build scores empirically for propensity and prognostic match
+
+# build propensity score
+propensity <- glm(t ~ X1, family = binomial(), data = df)
+  
+prop_match <- pairmatch(propensity, controls = k, df)
+  
+# 1:2 mahalanobis matching to select data to use for prognostic model
+mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
+  
+buff_match_assignment <- prognostic_match_assignment(df, propensity, mahal_match, as.formula(y ~ X1 + X2), k)
+```
+
+```{r, fig.width=8.2, fig.height= 3}
+a <- match_viz(df, m_match, rho, title = "Mahalanobis Match")
+b <- match_viz(df, prop_match, rho, title = "Estimated Propensity Match")
+c <- match_viz(buff_match_assignment$df, buff_match_assignment$match, rho, title = "Estimated Propensity x Prognosis Match")
+
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+```
+
+But, okay, a reasonable question to ask is: just how badly did we do in the model fitting?  Keep in mind that, with $\rho = 0.5$ as it does in these demonstrations, the correct models are:
+
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3-c,\\
+    \Psi(X_i) &= 0.5 X_{i1} + 0.866X_{i2},
+\end{align*}
+
+Below is a summary of our propensity and prognosis models.  One thing that's interesting is that the propensity model is - like - kind of awful and the prognostic model is quite good, in spite of the fact that the propensity model is fit on the entire data set while the prognostic model is fit on only 100 controls.  This may have something to do with the fact that the treatment is binary while the outcome is continuous.
+
+```{r}
+summary(buff_match_assignment$model)
+summary(propensity)
+```
+
+
+
+\pagebreak
+
+## Just for fun: Double-robustness
+
+We have the theoretical result that matching jointly on propensity and prognosis is doubly robust.  That is, as long as at least one of the models is correctly specified, the joint-matching approach will give you consistent inference.
+
+This is kind of a can of worms (since we don't really consider different model mis-specification scenarios in our simulations), but let's see if we can visualize this with our Fisher-Mill plots.  Below is a visualization of the matches we would have chosen if our propensity score model was fit on all 10 covariates, but our prognostic model was correctly specified.
+
+```{r}
+# Build scores empirically for propensity and prognostic match
+
+# build propensity score
+propensity <- glm(t ~ . - y - mu, family = binomial(), data = df)
+  
+prop_match <- pairmatch(propensity, controls = k, df)
+  
+# 1:2 mahalanobis matching to select data to use for prognostic model
+mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
+  
+buff_match_assignment <- prognostic_match_assignment(df, propensity, mahal_match, as.formula(y ~ X1 + X2), k)
+```
+
+```{r, fig.width=8.2, fig.height= 3}
+a <- match_viz(df, m_match, rho, title = "Mahalanobis Match")
+b <- match_viz(df, prop_match, rho, title = "Estimated Propensity Match")
+c <- match_viz(buff_match_assignment$df, buff_match_assignment$match, rho, title = "Estimated Propensity x Prognosis Match")
+
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+```
+
+And below is the reverse scenario: in which our propensity score model is right on the money and our prognostic score model is heavily overspecified.
+
+```{r}
+# Build scores empirically for propensity and prognostic match
+
+# build propensity score
+propensity <- glm(t ~ X1, family = binomial(), data = df)
+  
+prop_match <- pairmatch(propensity, controls = k, df)
+  
+# 1:2 mahalanobis matching to select data to use for prognostic model
+mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
+  
+buff_match_assignment <- prognostic_match_assignment(df, propensity, mahal_match, as.formula(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10), k)
+
+summary(buff_match_assignment$model)
+```
+
+```{r, fig.width=8.2, fig.height= 3}
+a <- match_viz(df, m_match, rho, title = "Mahalanobis Match")
+b <- match_viz(df, prop_match, rho, title = "Estimated Propensity Match")
+c <- match_viz(buff_match_assignment$df, buff_match_assignment$match, rho, title = "Estimated Propensity x Prognosis Match")
+
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+```
