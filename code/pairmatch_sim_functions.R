@@ -45,13 +45,16 @@ simulate_pairmatch <- function(df,
                         gamma = sapply(ndfs, gamma_sensitivity))
   
   # 1:2 mahalanobis matching to select data to use for prognostic model
-  mahal_dist <- match_on(prop_model, method = "mahalanobis", data = df)
+  mahal_dist <- match_on(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10,
+                         method = "mahalanobis", data = df)
   mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
   
   # perform prognostic score matching for k in ks
   # store sensitivity and att in prog_df
   g <- function(k){
-    prognostic_match(df, propensity, mahal_match, prog_model, k)
+    prognostic_match(df = df, propensity = propensity, 
+                     match_assignment = mahal_match,
+                     prog_model =  prog_model, k = k)
   }
   
   ndfs <- sapply(ks, g, simplify = FALSE)

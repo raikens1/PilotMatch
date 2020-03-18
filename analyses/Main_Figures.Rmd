@@ -165,7 +165,7 @@ read_data_1000 <- function(i, path_to_file){
   return(dat)
 }
 
-dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/mu_x1_over_3_minus_3/nsim_1000/")) %>% bind_rows
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/mu_x1_over_3_minus_3/nsim_1000/")) %>% bind_rows %>% filter(k <= 5)
 ```
 
 ```{r}
@@ -355,7 +355,7 @@ One potential simplification of this issue is to use fullmatch rather than 1:k m
 
 
 ```{r}
-dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fewer_controls/mu_x1_over_3_minus_275/")) %>% bind_rows
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fewer_controls/mu_x1_over_3_minus_275/")) %>% bind_rows %>% filter (k <= 5)
 ```
 
 ```{r}

@@ -13,10 +13,11 @@ require(sensitivityfull, quietly = T)
 #' @description Data set contains measured covariates X, unmeasured covariate U, 
 #' outcome Y, treatment assignment t, and logit(propensity), mu.
 #' 
-#' covariate data ~ normal(0,1); mu = true_mu + 0.2 * U; 
-#'              t ~ binom(p = 1/(1+exp(-mu))); 
-#'              y ~ rho * X1 + sqrt(1-rho^2) * X2 + 0.2*U + t + epsilon
-#'              epsilon ~ normal(0, 1)
+#' covariate data ~ normal(0,1);
+#' mu = true_mu; 
+#' t ~ binom(p = 1 / (1 + exp(-mu))); 
+#' y ~ rho * X1 + sqrt(1-rho^2) * X2 + 0.2 * U + t + epsilon
+#' epsilon ~ normal(0, 1)
 #'              
 #' @param N numeric, sample size
 #' @param p numeric, number of features
@@ -28,18 +29,17 @@ require(sensitivityfull, quietly = T)
 #' @return data.frame of covariates, y, t, and mu
 generate_xSITA_data <- function(N = 2000,
                           p = 10,
-                          true_mu = "X1/3-3", 
-                          rho = 0,
+                          true_mu = "X1/3-3 + nu * U", 
+                          rho = 0.1,
                           nu = 0.2,
                           sigma = 1,
                           tau = 1) {
+  # set up covariates
   df <- data.frame(matrix(rnorm(p * N), ncol = p)) %>%
-    mutate(U = rnorm(N))
-    
-  df <- df %>% mutate(mu = !!parse_quosure(true_mu) + nu * U)
-  df <- df %>% mutate(t = rbinom(n = N, size = 1, prob = 1/(1+exp(-mu))))
-  df <- df %>% mutate(y = tau*t + rho*X1 + sqrt(1-rho^2)*X2 + nu * U)
-  noise <- rnorm(N)
-  df$y <- df$y + sigma*noise
+    mutate(U = rnorm(N),
+           mu = !!parse_quosure(true_mu),
+           t = rbinom(n = N, size = 1, prob = 1 / (1 + exp(-mu))),
+           y = tau * t + rho * X1 + sqrt(1 - rho ^ 2)*X2 + nu * U + rnorm(N, sd = sigma))
+  
   return(df)
 }

@@ -18,8 +18,8 @@ source("../code/basic_sim_functions.R")
 #' @param ks, a vector of positive numbers indicating the number of controls to match to each treated
 #' @return a data.frame with results from propensity, mahalanobis, and buffalo matching
 simulate_fullmatch <- function(df, 
-                               prop_model = formula(t ~ . - mu - y), 
-                               prog_model = formula(y ~ . - mu - t),
+                               prop_model = formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10), 
+                               prog_model = formula(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10),
                                verbose = FALSE) {
   
   # propensity score full matching
