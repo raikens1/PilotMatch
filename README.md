@@ -1,7 +1,7 @@
 # Pilot Matching
 *Authors:* Rocky Aikens, Dylan Greaves, Michael Baiocchi
 
-This repository contains the code and data used to write an upcoming paper: Using the Prognostic score to Reduce Heterogeneity in Observational Studies"
+This repository contains the code and data used to write an upcoming paper: "Using the Prognostic score to Reduce Heterogeneity in Observational Studies." The [preprint is available](https://arxiv.org/abs/1908.09077) on the Statistics Methodology Archive
 
 ## Contents of this repo
 
