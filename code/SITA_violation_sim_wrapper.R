@@ -19,19 +19,19 @@ p <- as.numeric(args[2])
 nsim <- as.numeric(args[3])
 
 # defaults
-true_mu <- "X1/3 - 3"
+true_mu <- "X1/3 - 3 + nu * U"
 sigma <- 1
 tau <- 1
-ks <- 1:10
+ks <- 1:5
 N <- 2000
 full <- F
-nu <- 0.5
-prop_model <- formula(t ~ . - mu - y - U) 
-prog_model <- formula(y ~ . - mu - t - U)
+nu <- 0.2
+prop_model <- formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10) 
+prog_model <- formula(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
 
 run_sim <- function(rho = 0.1, p = 10, nsim = 10,
-                    out_file = "test_", true_mu = "X1/3 - 3", nu = 0.1,
-                    ks = 1:10, sigma = 1, tau = 1, N = 2000,
+                    out_file = "test_", true_mu = "X1/3 - 3 + nu * U", nu = 0.1,
+                    ks = 1:5, sigma = 1, tau = 1, N = 2000,
                     prog_model, prop_model,
                     full = FALSE) {
   t1 <- proc.time()
@@ -52,14 +52,6 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10,
   # simulate
   if (full){
     exit("fullmatching with SITA violation is not yet supported")
-    results <- replicate(nsim, simulate_fullmatch(generate_data(N=N, rho=rho,
-                                                                p = p,
-                                                                true_mu = true_mu,
-                                                                sigma = sigma,
-                                                                tau = tau),
-                                      verbose = TRUE),
-                       simplify = FALSE) %>% 
-      bind_rows()
   } else {
     results <- replicate(nsim,
                          simulate_pairmatch(generate_xSITA_data(N=N, rho=rho, p = p,

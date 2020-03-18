@@ -93,7 +93,7 @@ match_viz_xSITA <- function(data, match, rho, nu, k = 1, title = "Matching"){
     dplyr::select(prog1, prog2, prop1, prop2)
   
   plt <- ggplot(data = plt_data, aes( x = prop, y = prog, group = t, color = t)) + 
-    geom_point(aes(alpha = a), size = 2)+
+    geom_point(aes(alpha = a), size = 1)+
     scale_color_brewer(palette="Set1") +
     geom_segment(data = m_data, 
                  aes(x = prop1, y = prog1,
@@ -184,13 +184,13 @@ ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
 
 ## More intuition for gamma and confounding
 
-To try and understand this better, I want to think about a smaller sample size.
+To try and understand this better, I thought it might help to think about a smaller sample size. The sample below has 100 observations, and I've tinkered with the probability of treatment so that there are about 20-30 treated individuals.
 
 ```{r}
 rho <- 0.2
 nu = 1
 #simulate data
-df <- generate_xSITA_data(N = 100, p = 10, true_mu = "X1/3-2", nu = nu, rho = rho, sigma = 1)
+df <- generate_xSITA_data(N = 100, p = 10, true_mu = "X1/3-1", nu = nu, rho = rho, sigma = 1)
 k = 1
 prop_model = formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
 prog_model = formula(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
@@ -211,7 +211,7 @@ oracle_prop_match <- pairmatch(t ~ prop, controls = k, oracle_df)
 oracle_prog_match <- pairmatch(t ~ prog + prop, controls = k, oracle_df)
 ```
 
-If we made Fisher Mill plots from our scores and matched on them, this what we'd see:
+Again, let's suppose our propensity and prognostic models are fit perfectly on the observed covariates.  If we made Fisher Mill plots from our scores and matched on them, this what we'd see:
 
 ```{r,  fig.width=8, fig.height= 3}
 naive_df <- df %>%
@@ -225,7 +225,7 @@ ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
 ```
 
 
-But of course, the Fisher-Mill plots we make and the matches we select are missing the unobserved confounder, U.  If we made true Fisher-Mill plots based on the data generating functions, we'd see that the above matching scheme is not doing as well as we thought.
+But of course, the Fisher-Mill plots we make and the matches we select are missing the unobserved confounder, U.  If we made true Fisher-Mill plots based on the true data generating functions (with U), this is how we're actually doing.
 
 
 ```{r, fig.width=8, fig.height= 3}
@@ -236,6 +236,7 @@ c <- match_viz_xSITA(df, oracle_prog_match, rho, nu, title = "Best Propensity x 
 ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
 ```
 
+Yeah, I'm not having any brilliant insights.
 
 \pagebreak
 
@@ -467,7 +468,8 @@ ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right"
 ```
 # tau = 1, nu = 0.2, model correctly specified
 
-Something buggy happened to the MDM results; they're almost exactly the same as propensity score.
+Below are the results we'd see if we correctly specified the models for propensity and prognosis.  I've left out the results for Mahalanobis distance because there was a bug in the Mahalanobis distance matching code for these simulations.
+
 ```{r}
 read_xSITA_data_1000 <- function(i, path_to_file, nu){
   filename <- paste(path_to_file, "xSITA_results_",i,"_10_1000_nu_", nu * 10, sep = "")
@@ -503,10 +505,11 @@ plt_data <- dat %>%
 
 ```{r}
 plt_data <- plt_data %>%
-  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot"))) %>%
+  filter(method != "Mahalanobis")
 ```
 
-```{r, fig.width=8.5, fig.height=10.5}
+```{r, fig.width=6, fig.height=8}
 a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
   geom_line() + geom_point() +
     ylim(0, NA) + 
@@ -542,93 +545,7 @@ ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right"
 
 \pagebreak
 
-# tau = 1, nu = 0.2, confounder attenuates
-
-```{r}
-read_xSITA_data_1000 <- function(i, path_to_file, nu){
-  filename <- paste(path_to_file, "xSITA_results_",i,"_10_1000_nu_", nu * 10, sep = "")
-  dat <- read.csv(filename) %>%
-    mutate(rho = i/10)
-  return(dat)
-}
-
-dat <- lapply(1:10, function(x) read_xSITA_data_1000(x, "../data/SITA_violations/SITA_attenuator_nu_02/", 0.2)) %>% bind_rows
-```
-
-
-```{r}
-true_tau <- 1
-
-dat <-  dat %>%
-  filter(k <= 5) %>%
-  mutate(squared_err = (estimate-true_tau)**2,
-        k = as.factor(k))
-
-plt_data <- dat %>% 
-  group_by(method, k, rho) %>% 
-  summarize(Bias = mean(estimate) - true_tau, 
-            median_gamma = median(gamma), 
-            Standard.Deviation = sd(estimate),
-            MSE = Bias^2 + Standard.Deviation^2) %>%
-  ungroup() %>%
-  mutate(method = recode(method, propensity = "Propensity", 
-                         mahalanobis = "Mahalanobis", 
-                         prognostic = "Pilot"))
-```
-
-
-```{r}
-plt_data <- plt_data %>%
-  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
-```
-
-```{r, fig.width=8.5, fig.height=10.5}
-a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
-  geom_line() + geom_point() +
-    ylim(0, NA) + 
-  xlab(expression(paste("Correlation, ", rho)))+
-  facet_wrap(~method) +
-  scale_color_brewer(palette="RdYlBu")
-
-b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
-  geom_line() + geom_point() + facet_wrap(~method) +
-  xlab(expression(paste("Correlation, ", rho)))+
-    ylim(0, NA) + 
-  ylab("Standard Deviation")+
-  scale_color_brewer(palette="RdYlBu")
-
-c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
-  geom_line() + geom_point() + 
-  xlab(expression(paste("Correlation, ", rho)))+
-    ylim(0, NA) + 
-  facet_wrap(~method)+
-  scale_color_brewer(palette="RdYlBu")
-
-d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
-  geom_line() + geom_point() +
-  ylab(expression(paste("Median ", Gamma))) +
-  xlab(expression(paste("Correlation, ", rho)))+
-    ylim(0, NA) + 
-  facet_wrap(~method) + 
-  scale_color_brewer(palette="RdYlBu")
-
-ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right", labels = "AUTO")
-
-```
-
-
-
-
-
-
-
-
-
-\pagebreak
-
-
-
-# tau = 0, nu = 0.2, confounder attenuates
+# tau = 0, nu = 0.2
 
 ```{r}
 read_xSITA_data_1000 <- function(i, path_to_file, nu){

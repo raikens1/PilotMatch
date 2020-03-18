@@ -22,8 +22,8 @@ source("../code/basic_sim_functions.R")
 #' @param gamma boolean for whether or not to compute gamma (takes longer if TRUE)
 #' @return a data.frame with results from propensity, mahalanobis, and buffalo matching
 simulate_for_distances <- function(df, 
-                                   prop_model = formula(t ~ . - mu - y), 
-                                   prog_model = formula(y ~ . - mu - t),
+                                   prop_model = formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10), 
+                                   prog_model = formula(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10),
                                    verbose = FALSE,
                                    k = 3,
                                    true_rho = 0,
