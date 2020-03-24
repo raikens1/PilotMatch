@@ -150,61 +150,6 @@ pdf("../figures/Figure1.pdf",  width=8.2, height=3)
 ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
 dev.off()
 ```
-
-NOTE: One of our reviewers asked what the mean of the vertical distances is in panel B, above.  We're taking it to mean that if $i_1$ and $i_0$ are the indices of a pair of treated and control individuals, they want to know $E\left[\Psi(X_{i_1}) - \Psi(X_{i_0})\right]$.
-
-```{r}
-match_viz_data <- function(match_formula, rho){
-  df <- generate_data(N = 2000, p = 10, true_mu = "X1/3-3", rho = rho, sigma = 1)
-  oracle_df <- df %>% 
-    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
-           prop = 1/(1+exp(-(mu))))
-  
-  # match
-  mymatch <- pairmatch(match_formula, controls = 1, oracle_df)
-  
-  # reformat
-  plt_data <- df %>% 
-    mutate(m = mymatch) %>%
-    mutate(a = ifelse (is.na(m), 0.9, 1)) %>% 
-    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
-           prop = mu,
-           t = as.factor(abs(1-t))) %>%
-    dplyr::select(c(t, prog, prop, m, a))
-  
-  m_data <- plt_data %>% 
-    filter(!is.na(m)) %>%
-    arrange(m, desc(t)) %>% 
-    mutate(id = rep(1:(k + 1), sum(df$t))) %>%
-    dplyr::select(-c(t, a)) %>%
-    group_by(m) %>%
-    summarize(prop1 = first(prop), prop2 = last(prop),
-              prog1 = first(prog), prog2 = last(prog)) %>%
-    dplyr::select(prog1, prog2, prop1, prop2)
-  
-  result <- m_data %>% summarize(diff = mean(prog1 - prog2))
-  return(result[[1,1]])
-}
-
-mahal_mean_difs <- replicate(100, match_viz_data(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10, 0.5)) 
-prog_mean_difs <- replicate(100, match_viz_data(t ~ prop + prog, 0.5))
-prog_mean_difs <- replicate(100, match_viz_data(t ~ prop + prog, 0.5))
-```
-
-
-```{r}
-difs_data <- data.frame(method = rep(c("Propensity", "Joint"), each = 100),
-                        mean_difference = c(prop_mean_difs, prog_mean_difs))
-
-ggplot(difs_data, aes(x = method, y = mean_difference, fill = method)) +
-  geom_boxplot() + 
-  scale_fill_brewer(palette = "Set2") +
-  ylab("Mean Prognostic Score Difference") +
-  xlab("Method") +
-  theme(legend.position = "none")
-```
-
-
 # 5 Results 
 
 ## 5.1 Pilot matching performance with a large control reserve

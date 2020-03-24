@@ -19,9 +19,9 @@ p <- as.numeric(args[2])
 nsim <- as.numeric(args[3])
 
 # defaults
-true_mu <- "X1/3 - 3 + nu * U"
+true_mu <- "X1/3 - 3 - nu * U"
 sigma <- 1
-tau <- 1
+tau <- 0
 ks <- 1:5
 N <- 2000
 full <- F
