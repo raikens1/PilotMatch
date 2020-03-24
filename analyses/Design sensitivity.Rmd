@@ -1,0 +1,84 @@
+---
+title: "Main Figures"
+author: "Rachael Caelie (Rocky) Aikens"
+date: "5/3/2019"
+output: pdf_document
+---
+
+
+```{r setup, warning=FALSE, message = FALSE, include = FALSE}
+knitr::opts_chunk$set(cache=FALSE, warning = FALSE, message = FALSE, echo = FALSE, fig.align = "center", fig.height = 4)
+require(dplyr)
+require(ggplot2)
+require(gridExtra)
+require(ggpubr)
+require(knitr)
+theme_set(theme_light())
+source("../code/basic_sim_functions.R")
+set.seed(123)
+```
+
+# Set Up 
+
+We compare the performance of propensity score matching, Mahalanobis distance matching, and pilot matching (described in the manuscript) on simulated data, varying the dimensionality of the problem, the fixed treatment to control ratio during matching, and the correlation between the true propensity and prognostic score. The generative model for all of our simulations is the following:
+\begin{align*}
+    X_i &\sim_{iid} \text{Normal}(0,I_p),\\
+    T_i &\sim_{iid} \text{Bernoulli}\left(\frac{1}{1+\exp(-\phi(X_i))}\right),\\
+    Y_i &=\tau T_i + \Psi(X_i) + \epsilon_i,\\
+    \epsilon_i &\sim_{iid} N(0,\sigma^2),
+\end{align*}
+where the true propensity and prognositic scores are given by the linear combinations
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3-c,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+so that $\text{Cor}(\phi(X_i), \Psi(X_i)) \propto \rho$.  The constant, $c$, in the propensity score formula was chosen such that there were approximately 100 treated observations in each dataset. We consider $p=10$, $\rho = 0, 0.1,\hdots, 0.9, 1.0,$ and $k=1,\hdots, 10$. Each simulation consisted of a dataset of size $n=2000$ and was repeated $N=1000$ times.
+We fix the treatment effect to be constant with $\tau=1$ and the noise to be $\sigma=1$.
+For a given matching, we estimate ATT and design sensitivity $\tilde\Gamma$ using the permutation $t$-statistic from the package `sensitivtymv`.
+
+\pagebreak
+
+# Design sensitivity plots
+
+Below, I tried to use our empirical simulation results (with the setup above) to make a version of the plots shown in figure 14.3 in Rosenbaum "Design of Observational Studies."  Long story short... you don't see much.  I think part of this is because our sample size is too small to get an idea of the asymptotic nature of the power of the sensitivity analysis, which you need in order get a sense of where the design sensitivity is.  
+
+The issue is that at the end of the day, the sample size is determined primarily by the number of treated individuals in the sample.  I.e. even though each simulated data set has 2,000 observations, there will only be as many matched pairs as treated observations (about 100).  In order to keep all the simulation parameters stationary while getting a final sample size of, say 1000, I would have to simulate a sample size of 20,000.  At that point, matching is going to start becoming really computationally burdensome.
+
+```{r}
+read_data_1000 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/mu_x1_over_3_minus_3/nsim_1000/")) %>%
+  bind_rows %>%
+  filter(k <= 5) %>%
+  mutate(k = as.factor(k))
+```
+
+```{r}
+# gamma is hypothetical gamma for sensitivity analysis
+calculate_power <- function(g, r = 0.5){
+ dat %>% 
+    filter(rho == r) %>%
+    group_by(k, method) %>% 
+    summarize(p = sum(gamma >= g)/n()) %>%
+    mutate(gamma = g) %>%
+    return()
+}
+```
+
+```{r}
+sensitivity_df <- lapply(seq(1, 6, by = 0.1), calculate_power) %>%
+  bind_rows()
+```
+
+```{r}
+ggplot(sensitivity_df, aes(x = gamma, y = p, group = interaction(k, method), color = method, linetype = k)) + 
+  facet_wrap(~method, ncol = 1)+
+  geom_line() +
+  scale_color_brewer(palette = "Set1")
+```
+

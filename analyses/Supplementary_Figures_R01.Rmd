@@ -5,12 +5,11 @@ author:
 - Rachael C. Aikens
 - Dylan Greaves
 - Michael Baiocchi
-date: "8/23/2019"
 output: pdf_document
 ---
 
 ```{r setup, warning=FALSE, message = FALSE, include = FALSE}
-knitr::opts_chunk$set(cache=TRUE, warning = FALSE, message = FALSE, echo = FALSE, fig.align = "center", fig.height = 4)
+knitr::opts_chunk$set(cache=FALSE, warning = FALSE, message = FALSE, echo = FALSE, fig.align = "center", fig.height = 4)
 require(ggplot2)
 require(dplyr)
 require(gridExtra)
@@ -29,7 +28,8 @@ read_data_1000 <- function(i, path_to_file){
 ```
 
 ```{r}
-dat <- lapply(1:10, function(x) read_data_1000(x, "../data/p_50/")) %>% bind_rows
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/p_50/")) %>% bind_rows %>%
+  filter(k <= 5)
 ```
 
 ```{r}
@@ -99,7 +99,9 @@ read_data_1000 <- function(i, path_to_file){
 ```
 
 ```{r}
-dat <- lapply(1:10, function(x) read_data_1000(x, "../data/mu_x1_minus_10_3rds/nsim_1000/")) %>% bind_rows
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/mu_x1_minus_10_3rds/nsim_1000/")) %>%
+  bind_rows() %>%
+  filter(k <=5)
 ```
 
 ```{r}
@@ -141,7 +143,9 @@ b
 
 
 ```{r}
-dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/sigma_2/nsim_1000/")) %>% bind_rows()
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/sigma_2/nsim_1000/")) %>%
+  bind_rows() %>%
+  filter(k <= 5)
 ```
 
 ```{r}
