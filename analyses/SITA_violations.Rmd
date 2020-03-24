@@ -64,9 +64,9 @@ FM_plot_xSITA <- function(data, rho, nu = 0.2, title = ""){
 ```
 
 ```{r, fig.height=4, fig.width=8}
-a <- FM_plot_xSITA(generate_xSITA_data(true_mu = "X1/3-3", nu = nu), rho = 0, title = "rho = 0")
-b <- FM_plot_xSITA(generate_xSITA_data(true_mu = "X1/3-3", nu = nu), rho = 0.5, title = "rho = 0.5")
-c <- FM_plot_xSITA(generate_xSITA_data(true_mu = "X1/3-3", nu = nu), rho = 0.9, title = "rho = 0.9")
+a <- FM_plot_xSITA(generate_xSITA_data(nu = nu), rho = 0, title = "rho = 0")
+b <- FM_plot_xSITA(generate_xSITA_data(nu = nu), rho = 0.5, title = "rho = 0.5")
+c <- FM_plot_xSITA(generate_xSITA_data(nu = nu), rho = 0.9, title = "rho = 0.9")
 ggarrange(a,b,c, ncol = 3)
 ```
 
@@ -109,7 +109,7 @@ match_viz_xSITA <- function(data, match, rho, nu, k = 1, title = "Matching"){
 
 # like prognostic match except returns data frame and match assignments, not just the
 # reformatted dataframe of outcomes by match assignment
-prognostic_match_assignment_xSITA <- function(df, propensity, match_assignment, prog_model, n_control) {
+prognostic_match_assignment <- function(df, propensity, match_assignment, prog_model, n_control) {
   df$m <- match_assignment
   df$row <- 1:nrow(df)
   n_t<- sum(df$t)
@@ -120,7 +120,7 @@ prognostic_match_assignment_xSITA <- function(df, propensity, match_assignment, 
     group_by(m) %>%
     sample_n(size = 1)
   
-  prognostic <- lm(y ~ . - mu - t - row - m - U, data = selected)
+  prognostic <- lm(prog_model, data = selected)
   not_selected <- df[-selected$row, ]
   not_selected <- not_selected %>% 
 			mutate(progscore = predict(prognostic, not_selected)) %>%
@@ -135,7 +135,7 @@ prognostic_match_assignment_xSITA <- function(df, propensity, match_assignment, 
 ```{r}
 rho <- 0.2
 #simulate data
-df <- generate_xSITA_data(N = 2000, p = 10, true_mu = "X1/3-3", nu = nu, rho = rho, sigma = 1)
+df <- generate_xSITA_data(N = 2000, p = 10, nu = nu, rho = rho, sigma = 1)
 k = 1
 prop_model = formula(t ~ . - mu - y - U)
 prog_model = formula(y ~ . - mu - t - U)
@@ -171,6 +171,55 @@ ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
 
 But of course, the Fisher-Mill plots we make and the matches we select are missing the unobserved confounder, U.  If we made true Fisher-Mill plots based on the data generating functions, we'd see that the above matching scheme is not doing as well as we thought.
 
+
+```{r, fig.width=8, fig.height= 3}
+a <- match_viz_xSITA(df, m_match, rho, nu, title = "Mahalanobis Match")
+b <- match_viz_xSITA(df, oracle_prop_match, rho, nu, title = "Best Propensity Match")
+c <- match_viz_xSITA(df, oracle_prog_match, rho, nu, title = "Best Propensity x Prognosis Match")
+
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+```
+
+## An attenuator
+
+Suppose there really is a treatment effect and there is some confounder that is making it appear as though there is not.
+
+
+```{r}
+rho <- 0.2
+#simulate data
+df <- generate_xSITA_data(N = 2000, true_mu = "X1/3 - 10/3 - nu* U", p = 10, nu = nu, rho = rho, sigma = 1)
+k = 1
+prop_model = formula(t ~ . - mu - y - U)
+prog_model = formula(y ~ . - mu - t - U)
+
+# mahalanobis match
+mahal_dist <- match_on(prop_model, method = "mahalanobis", data = df)
+m_match <- pairmatch(mahal_dist, controls = k, df)
+```
+
+```{r}
+#Calculate best possible propensity and prognostic scores, and match on those
+oracle_df <- df %>% 
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = 1/(1+exp(-(mu + nu * U))))
+
+oracle_prop_match <- pairmatch(t ~ prop, controls = k, oracle_df)
+oracle_prog_match <- pairmatch(t ~ prog + prop, controls = k, oracle_df)
+```
+
+If we made Fisher Mill plots from our scores and matched on them, this what we'd see:
+
+```{r,  fig.width=8, fig.height= 3}
+naive_df <- df %>%
+  mutate(mu = mu + nu * U)
+
+a <- match_viz_xSITA(naive_df, m_match, rho, nu = 0, title = "Mahalanobis Match")
+b <- match_viz_xSITA(naive_df, oracle_prop_match, rho, nu = 0, title = "Best Propensity Match")
+c <- match_viz_xSITA(naive_df, oracle_prog_match, rho, nu = 0, title = "Best Propensity x Prognosis Match")
+
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+```
 
 ```{r, fig.width=8, fig.height= 3}
 a <- match_viz_xSITA(df, m_match, rho, nu, title = "Mahalanobis Match")

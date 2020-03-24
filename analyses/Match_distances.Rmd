@@ -133,7 +133,7 @@ prognostic_match_assignment <- function(df, propensity, match_assignment, prog_m
     group_by(m) %>%
     sample_n(size = 1)
   
-  prognostic <- lm(y ~ . - mu - t - row - m, data = selected)
+  prognostic <- lm(prog_model, data = selected)
   not_selected <- df[-selected$row, ]
   not_selected <- not_selected %>% 
 			mutate(progscore = predict(prognostic, not_selected)) %>%
@@ -149,8 +149,8 @@ rho <- 0.5
 #simulate data
 df <- generate_data(N = 2000, p = 10, true_mu = "X1/3-3", rho = rho, sigma = 1)
 k = 1
-prop_model = formula(t ~ . - mu - y)
-prog_model = formula(y ~ . - mu - t)
+prop_model = formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
+prog_model = formula(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
 
 # mahalanobis match
 mahal_dist <- match_on(prop_model, method = "mahalanobis", data = df)
@@ -333,6 +333,145 @@ ggplot(data = results_p, aes(x = mean_dist, y = abs(estimate-1), color = method,
 
 ```{r}
 ggplot(results_p, aes(x = prog_dist, y = prop_dist, group = method, color = method, size = 1/abs(estimate -1 ))) + geom_point() + xlim(0,1.25) + ylim(0,0.75)+ xlab("Mean prognostic distance") + ylab("Mean propensity distance")
+```
+
+# Distance and bias
+
+Distance is interesting, but it's also worth thinking about systematic deviations in score: who (treated or control) tends to have the higher score and who has the lower one?  If the treated individuals systematically have the higher prognostic score in certain scenarios, that tells us something.  This was something that one of our reviewers asked about.
+
+In essence, if $i_1$ and $i_0$ are the indices of a pair of treated and control individuals, we want to know $E\left[\Psi(X_{i_1}) - \Psi(X_{i_0})\right]$.  For our study to be unbaised, we'd like this quantity to be as low as possible.  The plots below answer that question, assuming that we had an oracle deliver the correct score models to us so that we didn't have to fit them ourselves.
+
+```{r}
+source("../code/SITA_violation_sim_functions.R")
+
+get_mean_diff <- function(df, mymatch, rho, nu){
+  # reformat
+  plt_data <- df %>% 
+    mutate(m = mymatch) %>%
+    mutate(a = ifelse (is.na(m), 0.9, 1)) %>% 
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2 + nu*U, 
+           prop = mu,
+           t = as.factor(abs(1-t))) %>%
+    dplyr::select(c(t, prog, prop, m, a))
+  
+  m_data <- plt_data %>% 
+    filter(!is.na(m)) %>%
+    arrange(m, desc(t)) %>% 
+    mutate(id = rep(1:2, sum(df$t))) %>%
+    dplyr::select(-c(t, a)) %>%
+    group_by(m) %>%
+    summarize(prop1 = first(prop), prop2 = last(prop),
+              prog1 = first(prog), prog2 = last(prog)) %>%
+    dplyr::select(prog1, prog2, prop1, prop2)
+  
+  result <- m_data %>% summarize(diff = mean(prog1 - prog2))
+  return(result[[1,1]])
+}
+
+simulate_diff <- function(method, rho, nu = 0, prog_formula = as.formula(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10),
+                          prop_formula = as.formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10), 
+                          mahal_formula = as.formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)){
+
+  df <- generate_xSITA_data(N = 2000, p = 10, true_mu = "X1/3-3", rho = rho, nu = nu, sigma = 1)
+  propensity <- glm(prop_model, family = binomial(), data = df)
+  
+  if(method == "Mahalanobis"){
+     mymatch <- pairmatch(mahal_formula, controls = 1, df) 
+  }
+  if(method == "Propensity"){
+    mymatch <- pairmatch(propensity, controls = 1, df)
+  }
+  if(method == "Pilot"){
+    # 1:2 mahalanobis matching to select data to use for prognostic model
+    mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
+  
+    buff_match_assignment <- prognostic_match_assignment(df, propensity, mahal_match, prog_formula, 1)
+    df <- buff_match_assignment$df
+    mymatch <- buff_match_assignment$match
+  }
+  return(get_mean_diff(df, mymatch, rho, nu))
+}
+```
+
+```{r}
+mahal_mean_difs <- replicate(100, simulate_diff("Mahalanobis", 0.5)) 
+prog_mean_difs <- replicate(100, simulate_diff("Propensity", 0.5))
+prog_mean_difs <- replicate(100, simulate_diff("Pilot", 0.5))
+```
+
+
+```{r}
+difs_data <- data.frame(method = rep(c("Mahalanobis", "Propensity", "Joint"), each = 100),
+                        mean_difference = c(mahal_mean_difs, prop_mean_difs, prog_mean_difs))
+
+ggplot(difs_data, aes(x = method, y = mean_difference, fill = method)) +
+  geom_boxplot() + 
+  scale_fill_brewer(palette = "Set2") +
+  ylab("Mean Prognostic Score Difference") +
+  xlab("Method") +
+  theme(legend.position = "none")
+```
+
+Here we see the mean prognostic score difference between treated and control individuals. I think this is really interesting.  Here we see that propensity score matching on average gives no systematic variation between the prognostic scores of matched individuals (boxplot centered at 0 = i.e. method is unbiased).  However, there is in practice a lot of variation between the prognostic scores of the matched individuals (method has high variance).  Prognostic score matching is centered close to zero (low bias) and shows very little variation (low variance). Some of the bias and variance of prognostic score matching would be avoided if we knew the prognostic model outright; in simulations where the prognostic model is already known perfectly, the box for Joint matchin is centered exactly at 0 and has very little variance.  Mahalanobis distance, however, systematically tends to match "sicker" treated individuals with "healthier" controls.  Even if the prognostic differences are lower on average than in propensity score matching, these differences are systematic, resulting in a biased estimate of treatment effect.
+
+
+The two plots below are the same, except that $\rho$ is changed.  The first plot below has $\rho = 0$ (problem is unconfounded), and the second has $\rho = 0.9$ (problem is highly confounded by $X_1$).  The systematic difference in prognostic score from Mahalanobis distance is erased in the unconfounded data set and exacerbated in the highly confounded one.
+
+```{r}
+mahal_rho_0 <- replicate(100, simulate_diff("Mahalanobis", 0)) 
+prop_rho_0 <- replicate(100, simulate_diff("Propensity", 0))
+prog_rho_0 <- replicate(100, simulate_diff("Pilot", 0))
+```
+
+
+```{r}
+difs_rho_0 <- data.frame(method = rep(c("Mahalanobis", "Propensity", "Joint"), each = 100),
+                        mean_difference = c(mahal_rho_0, prop_rho_0, prog_rho_0))
+
+ggplot(difs_rho_0, aes(x = method, y = mean_difference, fill = method)) +
+  geom_boxplot() + 
+  scale_fill_brewer(palette = "Set2") +
+  ylab("Mean Prognostic Score Difference") +
+  xlab("Method") +
+  theme(legend.position = "none")
+```
+
+```{r}
+mahal_rho_09 <- replicate(100, simulate_diff("Mahalanobis", 0.9)) 
+prop_rho_09 <- replicate(100, simulate_diff("Propensity", 0.9))
+prog_rho_09 <- replicate(100, simulate_diff("Pilot", 0.9))
+```
+
+
+```{r}
+difs_rho_09 <- data.frame(method = rep(c("Mahalanobis", "Propensity", "Joint"), each = 100),
+                        mean_difference = c(mahal_rho_09, prop_rho_09, prog_rho_09))
+
+ggplot(difs_rho_09, aes(x = method, y = mean_difference, fill = method)) +
+  geom_boxplot() + 
+  scale_fill_brewer(palette = "Set2") +
+  ylab("Mean Prognostic Score Difference") +
+  xlab("Method") +
+  theme(legend.position = "none")
+```
+
+```{r}
+mahal_rho_0_nu_05 <- replicate(100, simulate_diff("Mahalanobis", rho = 0, nu = 0.5)) 
+prop_rho_0_nu_05 <- replicate(100, simulate_diff("Propensity", rho = 0, nu = 0.5))
+prog_rho_0_nu_05 <- replicate(100, simulate_diff("Pilot", rho = 0, nu = 0.5))
+```
+
+
+```{r}
+difs_rho_0_nu_05 <- data.frame(method = rep(c("Mahalanobis", "Propensity", "Joint"), each = 100),
+                        mean_difference = c(mahal_rho_0_nu_05, prop_rho_0_nu_05, prog_rho_0_nu_05))
+
+ggplot(difs_rho_0_nu_05, aes(x = method, y = mean_difference, fill = method)) +
+  geom_boxplot() + 
+  scale_fill_brewer(palette = "Set2") +
+  ylab("Mean Prognostic Score Difference") +
+  xlab("Method") +
+  theme(legend.position = "none")
 ```
 
 # Future Directions
