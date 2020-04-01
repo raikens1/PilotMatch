@@ -19,13 +19,13 @@ p <- as.numeric(args[2])
 nsim <- as.numeric(args[3])
 
 # defaults
-true_mu <- "X1/3 - 3 - nu * U"
+true_mu <- "X1/3 - 3 + 5 *  nu * U"
 sigma <- 1
-tau <- 0
+tau <- 1
 ks <- 1:5
 N <- 2000
 full <- F
-nu <- 1
+nu <- 0.2
 prop_model <- formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10) 
 prog_model <- formula(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
 
