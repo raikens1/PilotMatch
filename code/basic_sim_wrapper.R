@@ -47,8 +47,8 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10,
   message(paste("sigma:", sigma))
   message(paste("tau:", tau))
   message(paste("Propensity Score model:", deparse(prop_model)))
-  message(paste("Prognostic Score model:", deparse(prop_model)))
-  message(paste("Mahalanobis Distance model:", deparse(prop_model)))
+  message(paste("Prognostic Score model:", deparse(prog_model)))
+  message(paste("Mahalanobis Distance model:", deparse(mahal_model)))
   message(paste("full:", full))
   message("********************")
   
