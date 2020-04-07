@@ -22,13 +22,18 @@ nsim <- as.numeric(args[3])
 true_mu <- "X1/3 - 3"
 sigma <- 1
 tau <- 1
-ks <- 1:10
+ks <- 1:5
 N <- 2000
 full <- F
+prop_model <-  formula(t ~ X1)
+prog_model <-  formula(y ~ X1 + X2)
+mahal_model <-  formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
 
 run_sim <- function(rho = 0.1, p = 10, nsim = 10,
                     out_file = "test_", true_mu = "X1/3 - 3", 
-                    ks = 1:10, sigma = 1, tau = 1, N = 2000,
+                    ks = 1:5, sigma = 1, tau = 1, N = 2000, 
+                    prop_model = prop_model, prog_model = prog_model,
+                    mahal_model = mahal_model,
                     full = FALSE) {
   t1 <- proc.time()
   
@@ -82,7 +87,7 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10,
 
 run_sim(rho = rho, p = p, nsim = nsim, 
         out_file = out_file, true_mu = true_mu, 
-        sigma = sigma, tau = tau, ks = ks, N = N,
+        sigma = sigma, tau = tau, ks = ks, N = N, 
+        prop_model = prop_model, prog_model = prog_model,
+        mahal_model = mahal_model,
         full = full)
- 
-

@@ -15,11 +15,16 @@ source("../code/basic_sim_functions.R")
 #' @param df, a data.frame from generate_data
 #' @param prop_model, the propensity score model
 #' @param prog_model, the prognostic score model
-#' @param ks, a vector of positive numbers indicating the number of controls to match to each treated
-#' @return a data.frame with results from propensity, mahalanobis, and buffalo matching ??
+#' @param mahal_model, the mahalanobis distance matching model (t ~ covariates
+#'   to match on)
+#' @param ks, a vector of positive numbers indicating the number of controls to
+#'   match to each treated
+#' @return a data.frame with results from propensity, mahalanobis, and buffalo
+#'   matching ??
 simulate_pairmatch <- function(df, 
                      prop_model = formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10), 
                      prog_model = formula(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10),
+                     mahal_model = formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10),
                      verbose = FALSE,
                      ks = 1:5, HTE = F) {
   
@@ -45,7 +50,7 @@ simulate_pairmatch <- function(df,
                         gamma = sapply(ndfs, gamma_sensitivity))
   
   # 1:2 mahalanobis matching to select data to use for prognostic model
-  mahal_dist <- match_on(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10,
+  mahal_dist <- match_on(mahal_model,
                          method = "mahalanobis", data = df)
   mahal_match <- pairmatch(mahal_dist, controls = 2, df) 
   

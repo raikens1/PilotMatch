@@ -137,8 +137,8 @@ rho <- 0.2
 #simulate data
 df <- generate_xSITA_data(N = 2000, p = 10, nu = nu, rho = rho, sigma = 1)
 k = 1
-prop_model = formula(t ~ . - mu - y - U)
-prog_model = formula(y ~ . - mu - t - U)
+prop_model = formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
+prog_model = formula(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
 
 # mahalanobis match
 mahal_dist <- match_on(prop_model, method = "mahalanobis", data = df)
@@ -515,6 +515,7 @@ d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
 ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right", labels = "AUTO")
 
 ```
+
 # tau = 1, nu = 0.2, model correctly specified
 
 Below are the results we'd see if we correctly specified the models for propensity and prognosis.  I've left out the results for Mahalanobis distance because there was a bug in the Mahalanobis distance matching code for these simulations.
@@ -594,6 +595,77 @@ ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right"
 
 \pagebreak
 
+# tau = 1, nu = 1, direction of confounding reversed
+
+```{r}
+dat <- lapply(1:10, function(x) read_xSITA_data_1000(x, "../data/SITA_violations/nu_1_attenuator/", 1)) %>% bind_rows
+```
+
+
+```{r}
+true_tau <- 1
+
+dat <- dat %>%
+  filter( k <= 5) %>%
+  mutate(squared_err = (estimate-true_tau)**2,
+         k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = mean(estimate) - true_tau, 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Pilot"))
+```
+
+
+```{r}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+```
+
+```{r, fig.width=8.5, fig.height=10.5}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  ylim(0, NA) + 
+  ylab("Standard Deviation")+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  ylim(0, NA) + 
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  ylim(0, NA) + 
+  scale_color_brewer(palette="RdYlBu")
+
+
+ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+```
+
+
+\pagebreak
+
+
 # tau = 0, nu = 0.2
 
 ```{r}
@@ -670,3 +742,220 @@ ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right"
 
 \pagebreak
 
+
+# tau = 0, nu = 1.0
+
+```{r}
+dat <- lapply(1:10, function(x) read_xSITA_data_1000(x, "../data/SITA_violations/nu_10/", 1)) %>% bind_rows
+```
+
+
+```{r}
+true_tau <- 0
+
+dat <- dat %>%
+  filter( k <= 5) %>%
+  mutate(squared_err = (estimate-true_tau)**2,
+         k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = mean(estimate) - true_tau, 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Pilot"))
+```
+
+
+```{r}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+```
+
+```{r, fig.width=8.5, fig.height=10.5}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  ylim(0, NA) + 
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  ylim(0, NA) + 
+  ylab("Standard Deviation")+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  ylim(0, NA) + 
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  ylim(0, NA) + 
+  scale_color_brewer(palette="RdYlBu")
+
+
+ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+```
+
+\pagebreak
+
+
+# tau = 1, nu = 1.0 for prop, nu = 0.2 for prog
+
+```{r}
+dat <- lapply(1:10, function(x) read_xSITA_data_1000(x, "../data/SITA_violations/nu_1_prop_02_prog/", 0.2)) %>% bind_rows
+```
+
+
+```{r}
+true_tau <- 1
+
+dat <- dat %>%
+  filter( k <= 5) %>%
+  mutate(squared_err = (estimate-true_tau)**2,
+         k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = mean(estimate) - true_tau, 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Pilot"))
+```
+
+
+```{r}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+```
+
+```{r, fig.width=8.5, fig.height=10.5}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  ylim(0, NA) + 
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  ylim(0, NA) + 
+  ylab("Standard Deviation")+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  ylim(0, NA) + 
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  ylim(0, NA) + 
+  scale_color_brewer(palette="RdYlBu")
+
+
+ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+```
+
+\pagebreak
+
+
+These don't really do what I expect.  Suspect a bug.
+
+
+# tau = 1, nu = 0.2 for prop, nu = 1 for prog
+
+These don't really do what I expect.  Suspect a bug.
+
+```{r}
+dat <- lapply(1:10, function(x) read_xSITA_data_1000(x, "../data/SITA_violations/nu_02_prop_1_prog/", 1 )) %>% bind_rows
+```
+
+
+```{r}
+true_tau <- 1
+
+dat <- dat %>%
+  filter( k <= 5) %>%
+  mutate(squared_err = (estimate-true_tau)**2,
+         k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = mean(estimate) - true_tau, 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Pilot"))
+```
+
+
+```{r}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+```
+
+```{r, fig.width=8.5, fig.height=10.5}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  ylim(0, NA) + 
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  ylim(0, NA) + 
+  ylab("Standard Deviation")+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  ylim(0, NA) + 
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  ylim(0, NA) + 
+  scale_color_brewer(palette="RdYlBu")
+
+
+ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+```
+
+\pagebreak

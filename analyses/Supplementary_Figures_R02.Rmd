@@ -123,11 +123,11 @@ overlap_histogram <- function(data, rho = 0){
 }
 ```
 
-```{r, fig.height=4, fig.width=8}
+```{r, fig.height=3, fig.width=8}
 a <- FM_plot(generate_data(true_mu = "X1-10/3"), rho = 0, title = "")
 b <- FM_plot(generate_data(true_mu = "X1-10/3"), rho = 0.5, title = "")
 c <- FM_plot(generate_data(true_mu = "X1-10/3"), rho = 0.9, title = "")
-ggarrange(a,b,c, ncol = 3)
+ggarrange(a,b,c, labels ="AUTO", ncol = 3)
 ```
 
 &nbsp;
@@ -145,10 +145,11 @@ ggarrange(a,b,c, ncol = 3)
 
 
 ```{r fig.height=3, fig.width=5}
+set.seed(150)
 overlap_histogram(generate_data(true_mu = "X1-10/3"))
 ```
 
-**Supplementary Figure 3:** Example overlayed density plot of logit propensity score in treated and control individuals for a simulation with diminished covariate overlap (in this simulation, $\rho = 0$).  Note that there were approximately 19 control observations for every treated observation for each data set, so in practice the counts for the control densities are much larger.
+**Supplementary Figure 3:** Example overlayed density plot of logit propensity score in treated and control individuals for a simulation with diminished covariate overlap (in this simulation, $\rho = 0$).  Note that there were approximately 19 control observations for every treated observation for each data set, so in practice the counts for the control observations are much larger.
 
 \pagebreak
 

@@ -335,7 +335,7 @@ ggplot(data = results_p, aes(x = mean_dist, y = abs(estimate-1), color = method,
 ggplot(results_p, aes(x = prog_dist, y = prop_dist, group = method, color = method, size = 1/abs(estimate -1 ))) + geom_point() + xlim(0,1.25) + ylim(0,0.75)+ xlab("Mean prognostic distance") + ylab("Mean propensity distance")
 ```
 
-# Distance and bias
+# Matching Discrepancies
 
 Distance is interesting, but it's also worth thinking about systematic deviations in score: who (treated or control) tends to have the higher score and who has the lower one?  If the treated individuals systematically have the higher prognostic score in certain scenarios, that tells us something.  This was something that one of our reviewers asked about.
 
@@ -348,23 +348,22 @@ get_mean_diff <- function(df, mymatch, rho, nu){
   # reformat
   plt_data <- df %>% 
     mutate(m = mymatch) %>%
-    mutate(a = ifelse (is.na(m), 0.9, 1)) %>% 
     mutate(prog = rho*X1 + sqrt(1-rho^2)*X2 + nu*U, 
            prop = mu,
            t = as.factor(abs(1-t))) %>%
-    dplyr::select(c(t, prog, prop, m, a))
+    dplyr::select(c(t, prog, prop, m))
   
   m_data <- plt_data %>% 
     filter(!is.na(m)) %>%
     arrange(m, desc(t)) %>% 
     mutate(id = rep(1:2, sum(df$t))) %>%
-    dplyr::select(-c(t, a)) %>%
+    dplyr::select(-c(t)) %>%
     group_by(m) %>%
-    summarize(prop1 = first(prop), prop2 = last(prop),
-              prog1 = first(prog), prog2 = last(prog)) %>%
-    dplyr::select(prog1, prog2, prop1, prop2)
+    summarize(prop1 = first(prop), prop0 = last(prop),
+              prog1 = first(prog), prog0 = last(prog)) %>%
+    dplyr::select(prog1, prog0, prop1, prop0)
   
-  result <- m_data %>% summarize(diff = mean(prog1 - prog2))
+  result <- m_data %>% summarize(diff = mean(prog1 - prog0))
   return(result[[1,1]])
 }
 
@@ -372,7 +371,7 @@ simulate_diff <- function(method, rho, nu = 0, prog_formula = as.formula(y ~ X1 
                           prop_formula = as.formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10), 
                           mahal_formula = as.formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)){
 
-  df <- generate_xSITA_data(N = 2000, p = 10, true_mu = "X1/3-3", rho = rho, nu = nu, sigma = 1)
+  df <- generate_xSITA_data(N = 2000, p = 10, true_mu = "X1/3-3 + nu * U", rho = rho, nu = nu, sigma = 1)
   propensity <- glm(prop_model, family = binomial(), data = df)
   
   if(method == "Mahalanobis"){
@@ -394,9 +393,9 @@ simulate_diff <- function(method, rho, nu = 0, prog_formula = as.formula(y ~ X1 
 ```
 
 ```{r}
-mahal_mean_difs <- replicate(100, simulate_diff("Mahalanobis", 0.5)) 
-prog_mean_difs <- replicate(100, simulate_diff("Propensity", 0.5))
-prog_mean_difs <- replicate(100, simulate_diff("Pilot", 0.5))
+mahal_mean_difs <- replicate(100, simulate_diff("Mahalanobis", rho = 0.5)) 
+prop_mean_difs <- replicate(100, simulate_diff("Propensity", rho =  0.5))
+prog_mean_difs <- replicate(100, simulate_diff("Pilot", rho = 0.5))
 ```
 
 
@@ -437,9 +436,9 @@ ggplot(difs_rho_0, aes(x = method, y = mean_difference, fill = method)) +
 ```
 
 ```{r}
-mahal_rho_09 <- replicate(100, simulate_diff("Mahalanobis", 0.9)) 
-prop_rho_09 <- replicate(100, simulate_diff("Propensity", 0.9))
-prog_rho_09 <- replicate(100, simulate_diff("Pilot", 0.9))
+mahal_rho_09 <- replicate(100, simulate_diff("Mahalanobis", rho = 0.9)) 
+prop_rho_09 <- replicate(100, simulate_diff("Propensity", rho = 0.9))
+prog_rho_09 <- replicate(100, simulate_diff("Pilot", rho = 0.9))
 ```
 
 
@@ -473,6 +472,26 @@ ggplot(difs_rho_0_nu_05, aes(x = method, y = mean_difference, fill = method)) +
   xlab("Method") +
   theme(legend.position = "none")
 ```
+
+```{r}
+mahal_rho_07_nu_05 <- replicate(100, simulate_diff("Mahalanobis", rho = 0.7, nu = 0.5)) 
+prop_rho_07_nu_05 <- replicate(100, simulate_diff("Propensity", rho = 0.7, nu = 0.5))
+prog_rho_07_nu_05 <- replicate(100, simulate_diff("Pilot", rho = 0.7, nu = 0.5))
+```
+
+
+```{r}
+difs_rho_07_nu_05 <- data.frame(method = rep(c("Mahalanobis", "Propensity", "Joint"), each = 100),
+                        mean_difference = c(mahal_rho_07_nu_05, prop_rho_07_nu_05, prog_rho_07_nu_05))
+
+ggplot(difs_rho_07_nu_05, aes(x = method, y = mean_difference, fill = method)) +
+  geom_boxplot() + 
+  scale_fill_brewer(palette = "Set2") +
+  ylab("Mean Prognostic Score Difference") +
+  xlab("Method") +
+  theme(legend.position = "none")
+```
+
 
 # Future Directions
 
