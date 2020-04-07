@@ -25,8 +25,8 @@ tau <- 1
 ks <- 1:5
 N <- 2000
 full <- F
-prop_model <-  formula(t ~ X1)
-prog_model <-  formula(y ~ X1 + X2)
+prop_model <-  formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
+prog_model <-  formula(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
 mahal_model <-  formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
 
 run_sim <- function(rho = 0.1, p = 10, nsim = 10,
