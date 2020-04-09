@@ -54,13 +54,24 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10,
   
   # simulate
   if (full){
-    results <- replicate(nsim, simulate_fullmatch(generate_data(N=N, rho=rho, p = p, true_mu = true_mu, sigma = sigma, tau = tau),
+    results <- replicate(nsim,
+                         simulate_fullmatch(generate_data(N=N, rho=rho, p = p,
+                                                          true_mu = true_mu,
+                                                          sigma = sigma,
+                                                          tau = tau),
                                       verbose = TRUE),
                        simplify = FALSE) %>% 
       bind_rows()
   } else {
-    results <- replicate(nsim, simulate_pairmatch(generate_data(N=N, rho=rho, p = p, true_mu = true_mu, sigma = sigma, tau = tau),
-                                             verbose = TRUE, ks = ks),
+    results <- replicate(nsim,
+                         simulate_pairmatch(generate_data(N=N, rho=rho, p = p,
+                                                          true_mu = true_mu,
+                                                          sigma = sigma,
+                                                          tau = tau),
+                                            prop_model = prop_model,
+                                            prog_model = prog_model,
+                                            mahal_model = mahal_mode,
+                                            verbose = TRUE, ks = ks),
                          simplify = FALSE) %>% 
       bind_rows()
   }

@@ -1004,3 +1004,80 @@ d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
 
 ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
 ```
+
+# Dimensionality
+
+Here, we suppose that we use the basic simulation set-up from the paper,
+
+\begin{align*}
+    X_i &\sim_{iid} \text{Normal}(0,I_p),\\
+    T_i &\sim_{iid} \text{Bernoulli}\left(\frac{1}{1+\exp(-\phi(X_i))}\right),\\
+    Y_i &=\tau T_i + \Psi(X_i) + \epsilon_i,\\
+    \epsilon_i &\sim_{iid} N(0,\sigma^2),
+\end{align*}
+where the true propensity and prognositic scores are given by the linear combinations
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3-c,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+with $p = 5$ rather than 10.
+
+```{r}
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/p_5/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=9, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right")
+```
+
