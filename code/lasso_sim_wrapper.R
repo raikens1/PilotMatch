@@ -7,6 +7,7 @@
 source("basic_sim_functions.R")
 source("fullmatch_sim_functions.R")
 source("pairmatch_sim_functions.R")
+source("lasso_sim_functions.R")
 
 out_file <- "lasso_results_"
 
