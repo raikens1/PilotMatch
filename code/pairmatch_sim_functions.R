@@ -35,7 +35,7 @@ simulate_pairmatch <- function(df,
     message(paste0("Insufficient controls.  Doing 1:1 to 1:", min(10, kmax), " matching instead"))
   }
   
-  # propensity score matching for k = 1:10
+  # propensity score matching 
   # store sensitivity and att in prop_df
   propensity <- glm(prop_model, family = binomial(), data = df)
   
