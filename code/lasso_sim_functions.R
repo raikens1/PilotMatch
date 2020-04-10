@@ -46,10 +46,11 @@ simulate_pairmatch_lasso <- function(df,
     as.matrix()
   
   cvprop <- cv.glmnet(x_all, y_all, family = "binomial")
-  prop_scores <- predict(cvprop, newx = x_all, s = "lambda.min")
+  prop_scores <- predict(cvprop, newx = x_all, s = "lambda.min") 
   
   if (max(prop_scores) == min(prop_scores)){
-    message("All prop scores are equal")
+    message("All prop scores are equal.  Using lambda = 0.005")
+    prop_scores <- predict(cvprop, newx = x_all, s = 0.005)
   }
   
   f <- function(k){ 
@@ -157,8 +158,8 @@ prognostic_match_lasso <- function(df, prop_scores, match_assignment,
   prog_scores <- predict(cvprog, newx = x_analysis, s = "lambda.min")
   
   if (max(prog_scores) == min(prog_scores)){
-    message("All prog scores are equal")
-    prog_scores <- predict(cvprog, newx = x_analysis, s = 0.005)
+    message("All prog scores are equal. Using lambda = 0.1")
+    prog_scores <- predict(cvprog, newx = x_analysis, s = 0.1)
   }
   
   analysis_set <- analysis_set %>% 
