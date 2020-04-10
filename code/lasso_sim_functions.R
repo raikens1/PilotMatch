@@ -158,6 +158,7 @@ prognostic_match_lasso <- function(df, prop_scores, match_assignment,
   
   if (max(prog_scores) == min(prog_scores)){
     message("All prog scores are equal")
+    prog_scores <- predict(cvprog, newx = x_analysis, s = 0.005)
   }
   
   analysis_set <- analysis_set %>% 
