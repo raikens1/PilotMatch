@@ -70,7 +70,7 @@ run_sim <- function(rho = 0.1, p = 10, nsim = 10,
                                                           tau = tau),
                                             prop_model = prop_model,
                                             prog_model = prog_model,
-                                            mahal_model = mahal_mode,
+                                            mahal_model = mahal_model,
                                             verbose = TRUE, ks = ks),
                          simplify = FALSE) %>% 
       bind_rows()

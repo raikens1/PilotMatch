@@ -1063,8 +1063,6 @@ b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)
   xlab(expression(paste("Correlation, ", rho)))+
   scale_color_brewer(palette="RdYlBu")
 
-ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
-
 c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
   geom_line() + geom_point() + 
   xlab(expression(paste("Correlation, ", rho)))+
