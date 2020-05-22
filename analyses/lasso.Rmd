@@ -1,0 +1,151 @@
+---
+title: "Lasso Results"
+output: pdf_document
+---
+
+```{r setup, warning=FALSE, message = FALSE, include = FALSE}
+knitr::opts_chunk$set(cache=FALSE, warning = FALSE, message = FALSE, echo = FALSE, fig.align = "center", fig.height = 4)
+require(ggplot2)
+require(dplyr)
+require(gridExtra)
+require(ggpubr)
+theme_set(theme_light())
+source("../code/basic_sim_functions.R")
+```
+
+# Primary simulations from paper
+
+For reference, the performance of each method under this formulation is given below.  
+
+```{r}
+read_data_1000 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/mu_x1_over_3_minus_3/nsim_1000/")) %>% bind_rows %>% filter(k < 6)
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=9.5, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, c, d, ncol = 1, common.legend = TRUE, legend = "right")
+```
+
+\pagebreak
+
+# Lasso
+
+Same idea, except now the score models are both fit with a lasso model.
+
+Note that the coefficient of X1 in the propensity score model was increased (from 1/3 to 1/2) because otherwise it was common for the lasso regression to over-regularize and conclude that all coefficients were zero.
+
+```{r}
+read_data_1000_lasso <- function(i, path_to_file){
+  filename <- paste(path_to_file, "lasso_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+dat <- lapply(1:10, function(x) read_data_1000_lasso(x, "../data/lasso/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = abs(mean(estimate) - true_tau), 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Buffalo"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Buffalo")))
+```
+
+```{r, fig.width=8.5, fig.height=9.5, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right")
+```

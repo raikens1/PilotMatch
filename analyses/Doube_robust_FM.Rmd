@@ -1,0 +1,190 @@
+---
+title: "Double Robustness"
+author: "Rachael Caelie (Rocky) Aikens"
+date: "4/10/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, warning=FALSE, message = FALSE, include = FALSE}
+knitr::opts_chunk$set(cache=TRUE, warning = FALSE, message = FALSE, echo = FALSE, fig.align = "center", fig.height = 4)
+require(dplyr)
+require(ggplot2)
+require(gridExtra)
+require(ggpubr)
+require(knitr)
+theme_set(theme_light())
+source("../code/basic_sim_functions.R")
+set.seed(123)
+```
+
+
+# Double Robustness and Fisher Mill
+
+I've been thinking a little about a visualization for double robustnesss.  Let's consider a data generating process much like our usual:
+\begin{align*}
+    X_i &\sim_{iid} \text{Normal}(0,I_p),\\
+    T_i &\sim_{iid} \text{Bernoulli}\left(\frac{1}{1+\exp(-\phi(X_i))}\right),\\
+    Y_i &=\tau T_i + \Psi(X_i) + \epsilon_i,\\
+    \epsilon_i &\sim_{iid} N(0,\sigma^2),
+\end{align*}
+Except that the true propensity score now depends on two variables: $X_1$ and $X_3$,
+\begin{align*}
+    \phi(X_i) &= X_{i1}/3 + X_{i3}-c,\\
+    \Psi(X_i) &=\rho X_{i1} + \sqrt{(1-\rho^2)}X_{i2},
+\end{align*}
+
+This way we can think a little bit about what happens when the model isn't perfectly specified.
+
+# Baseline: All models are correct
+
+As usual, below is the plot of the true optimal matches in each scenario:
+
+```{r}
+match_viz <- function(data, match, rho, k = 1, title = "Matching"){
+  plt_data <- data %>% 
+    mutate(m = match) %>%
+    mutate(a = ifelse (is.na(m), 0.9, 1)) %>% 
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = mu,
+           t = as.factor(abs(1-t))) %>%
+    dplyr::select(c(t, prog, prop, m, a))
+  
+  m_data <- plt_data %>% 
+    filter(!is.na(m)) %>%
+    arrange(m, desc(t)) %>% 
+    mutate(id = rep(1:(k + 1), sum(data$t))) %>%
+    dplyr::select(-c(t, a)) %>%
+    group_by(m) %>%
+    summarize(prop1 = first(prop), prop2 = last(prop),
+              prog1 = first(prog), prog2 = last(prog)) %>%
+    dplyr::select(prog1, prog2, prop1, prop2)
+  
+  plt <- ggplot(data = plt_data, aes( x = prop, y = prog, group = t, color = t)) + 
+    geom_point(aes(alpha = a), size = 1)+
+    scale_color_brewer(palette="Set1") +
+    geom_segment(data = m_data, 
+                 aes(x = prop1, y = prog1,
+                     xend = prop2, yend = prog2),
+                 color =  "black", group = NA, linetype = "dashed") +
+    ggtitle( title)+
+    theme(legend.position = "none", aspect.ratio=1, plot.title = element_text(hjust = 0.5, size = 9))+
+    ylab(expression(paste(Psi, "(x)", sep = ""))) +
+    xlab(expression(paste(phi, "(x)", sep = "")))
+  
+  return(plt)
+}
+
+overlap_histogram <- function(data){
+    plt_data <- data %>% 
+      mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = mu,
+           t = as.factor(abs(1-t))) %>%
+      dplyr::select(c(t, prog, prop))
+    
+    ggplot(plt_data, aes(x = prop, fill = t)) + geom_histogram(alpha = 0.4, position = "identity")
+}
+
+# like prognostic match except returns data frame and match assignments, not just the
+# reformatted dataframe of outcomes by match assignment
+prognostic_match_assignment <- function(df, propensity, match_assignment, prog_model, n_control) {
+  df$m <- match_assignment
+  df$row <- 1:nrow(df)
+  n_t<- sum(df$t)
+
+  selected <- df %>% 
+    filter(!is.na(m)) %>%
+    filter(t==0) %>%
+    group_by(m) %>%
+    sample_n(size = 1)
+  
+  prognostic <- lm(prog_model, data = selected)
+  not_selected <- df[-selected$row, ]
+  not_selected <- not_selected %>% 
+			mutate(progscore = predict(prognostic, not_selected)) %>%
+			mutate(propscore = predict(propensity, not_selected))
+  prog_dist <- match_on(t ~ progscore + propscore, data = not_selected)
+  prog_match <- pairmatch(prog_dist, controls = n_control, data = not_selected) 
+  return(list(df = not_selected, match = prog_match, k = n_control))
+}
+```
+
+```{r}
+df <- generate_data(true_mu = "X1/3 + X3/3 - 3", rho = 0.5)
+k = 1
+rho = 0.5
+prop_model = formula(t ~ X1 + X3)
+prog_model = formula(y ~ X1 + X2)
+mahal_model = formula(t ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10)
+
+# mahalanobis match
+mahal_dist <- match_on(mahal_model, method = "mahalanobis", data = df)
+m_match <- pairmatch(mahal_dist, controls = k, df)
+# Build scores empirically for propensity and prognostic match
+```
+
+
+```{r}
+#Calculate true propensity and prognostic score, and match on the true score
+oracle_df <- df %>% 
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = 1/(1+exp(-(mu))))
+
+oracle_prop_match <- pairmatch(t ~ prop, controls = k, oracle_df)
+oracle_prog_match <- pairmatch(t ~ prog + prop, controls = k, oracle_df)
+```
+
+```{r, fig.width=8, fig.height= 3}
+a <- match_viz(df, m_match, rho, title = "Mahalanobis Match")
+b <- match_viz(df, oracle_prop_match, rho, title = "True Propensity Match")
+c <- match_viz(df, oracle_prog_match, rho, title = "True Propensity x Prognosis Match")
+
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+```
+
+\pagebreak
+
+# Propensity score mis-specified, Prognostic score correct
+
+Now, let's suppose that we have obtained a perfect prognostic score model, but our propensity score model is missing information.  In particular, let's assume that we have perfectly estimated the effect of $X_1$ on treatment assignment, but we have entirely missed $X_3$ in our model.  Below we see how the propensity score matches are a lot more variable in quality, but matching jointly on the prognostic score helps ameliorate some of those problems.
+
+```{r}
+#Calculate true propensity and prognostic score, and match on the true score
+naive_df <- df %>% 
+    mutate(prog = rho*X1 + sqrt(1-rho^2)*X2, 
+           prop = 1/(1 + exp(-(mu + X3 / 3))))
+
+naive_prop_match <- pairmatch(t ~ prop, controls = k, naive_df)
+naive_prog_match <- pairmatch(t ~ prog + prop, controls = k, naive_df)
+```
+
+```{r, fig.width=8, fig.height= 3}
+a <- match_viz(df, m_match, rho, title = "Mahalanobis Match")
+b <- match_viz(df, naive_prop_match, rho, title = "True Propensity Match")
+c <- match_viz(df, naive_prog_match, rho, title = "True Propensity x Prognosis Match")
+
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+```
+
+# Prognostic score mis-specified, Propensity score correct
+
+And below, let's suppose the opposite scenario: our model for propensity is perfect, but our model for prognosis is missing the contribution of $X_1$.
+
+```{r}
+#Calculate true propensity and prognostic score, and match on the true score
+naive_df <- df %>% 
+    mutate(prog = sqrt(1-rho^2)*X2, 
+           prop = 1/(1 + exp(-(mu))))
+
+naive_prop_match <- pairmatch(t ~ prop, controls = k, naive_df)
+naive_prog_match <- pairmatch(t ~ prog + prop, controls = k, naive_df)
+```
+
+```{r, fig.width=8, fig.height= 3}
+a <- match_viz(df, m_match, rho, title = "Mahalanobis Match")
+b <- match_viz(df, naive_prop_match, rho, title = "True Propensity Match")
+c <- match_viz(df, naive_prog_match, rho, title = "True Propensity x Prognosis Match")
+
+ggarrange(a,b,c, ncol= 3, labels = "AUTO" )
+```

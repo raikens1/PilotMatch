@@ -353,7 +353,7 @@ As a result, we advise the following.  First, the number, $k$, of treated indivi
 One potential simplification of this issue is to use fullmatch rather than 1:k matching, since fullmatch deals elegantly with the problem of the ratios of treated and control individuals varying across the covariate space.  Figure 5 shows the results of fullmatching using Mahalanobis distance, propensity score, and pilot matching.
 
 ```{r}
-dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fewer_controls/mu_x1_over_3_minus_275/")) %>% bind_rows %>% filter (k <= 5)
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/correct_specification/")) %>% bind_rows %>% filter (k <= 5)
 ```
 
 ```{r}
@@ -393,8 +393,6 @@ b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)
     ylab("Standard Deviation")+
   scale_color_brewer(palette="RdYlBu")
 
-ggarrange(a, b, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
-
 c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
   geom_line() + geom_point() + 
   xlab(expression(paste("Correlation, ", rho)))+
@@ -412,9 +410,9 @@ ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right")
 ```
 
 ```{r fig.width=8.5, fig.height=6, echo = FALSE}
-p <- ggarrange(a,b,c, ncol = 1, nrow = 3, common.legend = TRUE, legend = "right", labels = "AUTO")
+p <- ggarrange(c,d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right", labels = "AUTO")
 
-ggsave("../figures/Figure5.pdf", p,  width=8.5, height=7)
+ggsave("../figures/Figure5.pdf", p,  width=8.5, height=5.5)
 ```
 
 ### 5.2.4 Fitting propensity and prognostic models

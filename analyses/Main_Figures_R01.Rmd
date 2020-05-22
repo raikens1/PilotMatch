@@ -245,6 +245,36 @@ p <- ggarrange(c, d, ncol = 1, nrow = 2, common.legend = TRUE, legend = "right",
 ggsave("../figures/Figure3.pdf", p,  width=8.5, height=5.5)
 ```
 
+```{r}
+plt_data %>%
+  filter(k == 1, method != "Mahalanobis") %>%
+  select(method, rho, Standard.Deviation) %>%
+  spread(method, Standard.Deviation) %>%
+  mutate(Percent_change = 1 - Pilot/Propensity)
+
+plt_data %>%
+  filter(k == 2, method != "Mahalanobis") %>%
+  select(method, rho, Standard.Deviation) %>%
+  spread(method, Standard.Deviation) %>%
+  mutate(Percent_change = 1 - Pilot/Propensity)
+```
+
+```{r}
+plt_data %>%
+  filter(k == 1, method != "Mahalanobis") %>%
+  select(method, rho, MSE) %>%
+  spread(method, MSE) %>%
+  mutate(Percent_change = 1 - Pilot/Propensity)
+
+plt_data %>%
+  filter(k == 1, method != "Mahalanobis") %>%
+  select(method, rho, MSE) %>%
+  spread(method, MSE) %>%
+  mutate(Percent_change = 1 - Pilot/Propensity)
+```
+
+
+
 Figure 2 shows the mean squared error and median gamma sensitivity from the same set of simulations as above.  Figure 2A demonstrates that pilot matching does well compared to the other two methods in terms of mean squared error, because of the protection against bias and variance shown in figure 1. Figure 2B shows the protective effect of prognostic balance against unobserved confounding.  Propensity score matching gives lowest $\Gamma$ values, especially when $\rho$ is small. When this happens, the propensity score contains no prognostically relevant covariates, so the matches produced have poor prognostic balance.  As $\rho$ increases, the prognostic score and the propensity score become highly correllated, so matching on propensity score starts to give some prognostic balance as well as propensity balance.  While the Gamma sentistivity of Mahalanobis distance matching seems promising when $\rho$ is large, most of this is likely due to the large amount of bias in the effect estimate from this method (Figure 1A).  Because pilot matching directly attempts to achieve prognostic balance in the matched sets, the pilot matching method has better protection against unobserved confounding, without giving a highly biased estimator.
 
 

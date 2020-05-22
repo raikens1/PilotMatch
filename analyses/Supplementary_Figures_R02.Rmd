@@ -1,7 +1,6 @@
 ---
 title: "Supplementary Figures"
-subtitle: 'Using the Prognostic Score to Reduce Heterogeneity in Observational Studies'
-author: Rachael C. Aikens, Dylan Greaves, and Michael Baiocchi
+subtitle: 'Pilot Designs: Using Abundant Data Thoughtfully'
 output: pdf_document
 ---
 
@@ -16,6 +15,74 @@ source("../code/basic_sim_functions.R")
 
 set.seed(123)
 ```
+
+```{r}
+read_data_1000_lasso <- function(i, path_to_file){
+  filename <- paste(path_to_file, "lasso_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+dat <- lapply(1:10, function(x) read_data_1000_lasso(x, "../data/lasso/")) %>% bind_rows
+```
+
+```{r}
+true_tau <- 1
+
+dat <- dat %>% mutate(
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>%
+  group_by(method, k, rho) %>% 
+  summarize(Bias = mean(estimate) - true_tau, 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Pilot"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+```
+
+```{r, fig.width=8.5, fig.height=8.9, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+    ylab("Standard Deviation")+
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right", labels = "AUTO")
+```
+
+**Supplementary Figure 1:** Bias, standard deviation, MSE and median gamma when the score models were fit with a lasso.  All simulation parameters are the same as described in Section 4.2, except that $\phi(X_i) = X_{i1}/2 - 3$, giving more structure to the propensity score so that it could reasonably be fit with a sparsifying model.  The regularization penalty for each score model was determined using 10-fold cross validation.  In rare cases, the propensity score model with minimum cross-validation error amounted to estimating all non-intercept model coefficients as zero.  When this occurred, a very mild ($\lambda = 0.005$) regularization was used as a default, rather than the cross-validation optimum.
+
+\pagebreak
+
 
 ```{r}
 read_data_1000 <- function(i, path_to_file){
@@ -84,7 +151,151 @@ d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
 ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right", labels = "AUTO")
 ```
 
-**Supplementary Figure 1:** Bias, standard deviation, MSE, and median $\Gamma$ of matching estimators when the number of uninformative covariates is increased. All simulation parameters are the same as described in Section 4.2, except that the number of covariates, $p$, is increased to 50.
+**Supplementary Figure 2:** Bias, standard deviation, MSE, and median $\Gamma$ of matching estimators when the number of uninformative covariates is increased. All simulation parameters are the same as described in Section 4.2, except that the number of covariates, $p$, is increased to 50.
+
+\pagebreak
+
+```{r}
+read_xSITA_data_1000 <- function(i, path_to_file, nu){
+  filename <- paste(path_to_file, "xSITA_results_",i,"_10_1000_nu_", nu * 10, sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+
+dat <- lapply(1:10, function(x) read_xSITA_data_1000(x, "../data/SITA_violations/nu_2/", 0.2)) %>% bind_rows
+```
+
+
+```{r}
+true_tau <- 1
+
+dat <-  dat %>%
+  filter(k <= 5) %>%
+  mutate(squared_err = (estimate-true_tau)**2,
+        k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = mean(estimate) - true_tau, 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Pilot"))
+```
+
+
+```{r}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+```
+
+```{r, fig.width=8.5, fig.height=9.4, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  ylim(c(0, NA)) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  ylab("Standard Deviation")+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right", labels = "AUTO")
+
+```
+
+**Supplementary Figure 3:** Bias, standard deviation, MSE, and median $\Gamma$ of matching estimators when an unobserved confounder is present.
+
+
+\pagebreak
+
+```{r}
+read_data_1000 <- function(i, path_to_file){
+  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
+  dat <- read.csv(filename) %>%
+    mutate(rho = i/10)
+  return(dat)
+}
+```
+
+```{r}
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/fewer_controls/mu_x1_over_3_minus_275/")) %>% bind_rows %>% filter (k <= 5)
+```
+
+```{r}
+true_tau <- 1
+
+dat <- mutate(dat, 
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>% 
+  group_by(method, k, rho) %>% 
+  summarize(Bias = mean(estimate) - true_tau, 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Pilot"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+```
+
+```{r, fig.width=8.5, fig.height=9.4, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+  xlab(expression(paste("Correlation, ", rho)))+
+    ylab("Standard Deviation")+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right")
+```
+
+**Supplementary Figure 4:** Mahalanobis, propensity, and prognostic pilot matching performance in terms of Bias (A), Variance (B), and MSE(C) for 1:k optimal matching with a smaller control reserve ($n = 1600$)
 
 \pagebreak
 
@@ -132,7 +343,7 @@ ggarrange(a,b,c, labels ="AUTO", ncol = 3)
 
 &nbsp;
 
-**Supplementary Figure 2:** Example Fisher-Mill plots for a scenario with diminished covariate overlap between treated and control individuals.  Blue dots represent control individuals, red dots represent treated individuals, and dotted lines connect matched pairs.  The correllation $\rho$ between $\phi$ and $\Psi$ is 0, 0.5, and 0.9, respectively in figures (A), (B) and (C). Simulations were carried out as described in Section 4.2, but with $\phi(X_i) = X_{i1} - 10/3$. This kept the sample size and number of treated individuals constant while increasing the separation of treated and control individuals in terms of the covariate X1.
+**Supplementary Figure 5:** Example Fisher-Mill plots for a scenario with diminished covariate overlap between treated and control individuals.  Blue dots represent control individuals, red dots represent treated individuals, and dotted lines connect matched pairs.  The correllation $\rho$ between $\phi$ and $\Psi$ is 0, 0.5, and 0.9, respectively in figures (A), (B) and (C). Simulations were carried out as described in Section 4.2, but with $\phi(X_i) = X_{i1} - 10/3$. This kept the sample size and number of treated individuals constant while increasing the separation of treated and control individuals in terms of the covariate X1.
 
 &nbsp;
 &nbsp;
@@ -149,18 +360,9 @@ set.seed(150)
 overlap_histogram(generate_data(true_mu = "X1-10/3"))
 ```
 
-**Supplementary Figure 3:** Example overlayed density plot of logit propensity score in treated and control individuals for a simulation with diminished covariate overlap (in this simulation, $\rho = 0$).  Note that there were approximately 19 control observations for every treated observation for each data set, so in practice the counts for the control observations are much larger.
+**Supplementary Figure 6:** Example overlayed density plot of logit propensity score in treated and control individuals for a simulation with diminished covariate overlap (in this simulation, $\rho = 0$).  Note that there were approximately 19 control observations for every treated observation for each data set, so in practice the counts for the control observations are much larger.
 
 \pagebreak
-
-```{r}
-read_data_1000 <- function(i, path_to_file){
-  filename <- paste(path_to_file, "angle_sigma1_results_",i,"_10_1000", sep = "")
-  dat <- read.csv(filename) %>%
-    mutate(rho = i/10)
-  return(dat)
-}
-```
 
 ```{r}
 dat <- lapply(1:10, function(x) read_data_1000(x, "../data/mu_x1_minus_10_3rds/nsim_1000/")) %>%
@@ -221,7 +423,71 @@ d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
 ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right", labels = "AUTO")
 ```
 
-**Supplementary Figure 4:** Bias, standard deviation, MSE, and median $\Gamma$ from matching estimators for simulations with worse covariate overlap between treated and control observations.
+**Supplementary Figure 7:** Bias, standard deviation, MSE, and median $\Gamma$ from matching estimators for simulations with worse covariate overlap between treated and control observations.
+
+
+\pagebreak
+
+```{r}
+dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/sigma_2/nsim_1000/")) %>%
+  bind_rows() %>%
+  filter(k <= 5)
+```
+
+```{r}
+true_tau <- 1
+
+dat <- dat %>% mutate(
+              squared_err = (estimate-true_tau)**2,
+              k = as.factor(k))
+
+plt_data <- dat %>%
+  group_by(method, k, rho) %>% 
+  summarize(Bias = mean(estimate) - true_tau, 
+            median_gamma = median(gamma), 
+            Standard.Deviation = sd(estimate),
+            MSE = Bias^2 + Standard.Deviation^2) %>%
+  ungroup() %>%
+  mutate(method = recode(method, propensity = "Propensity", 
+                         mahalanobis = "Mahalanobis", 
+                         prognostic = "Pilot"))
+```
+
+```{r, echo = FALSE}
+plt_data <- plt_data %>%
+  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
+```
+
+```{r, fig.width=8.5, fig.height=9.4, echo = FALSE}
+a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
+  geom_line() + geom_point() +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) +
+  scale_color_brewer(palette="RdYlBu")
+
+b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
+  geom_line() + geom_point() + facet_wrap(~method) +
+    ylab("Standard Deviation")+
+  xlab(expression(paste("Correlation, ", rho)))+
+  scale_color_brewer(palette="RdYlBu")
+
+c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
+  geom_line() + geom_point() + 
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method)+
+  scale_color_brewer(palette="RdYlBu")
+
+d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
+  geom_line() + geom_point() +
+  ylab(expression(paste("Median ", Gamma))) +
+  xlab(expression(paste("Correlation, ", rho)))+
+  facet_wrap(~method) + 
+  scale_color_brewer(palette="RdYlBu")
+
+ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right", labels = "AUTO")
+```
+
+**Supplementary Figure 8:** Bias, standard deviation, MSE and median gamma when the random noise contributing to the outcome is increased.  All simulation parameters are the same as described in Section 4.2, except that $\sigma = 2$ This increases the difficulty of fitting the prognostic score, diminishing the relative performance of pilot matching in terms of MSE and sensitivity.
 
 \pagebreak
 
@@ -293,67 +559,4 @@ ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right"
 
 ```
 
-**Supplementary Figure 5:** Bias, standard deviation, MSE, and median $\Gamma$ from matching estimators for simulations with a heterogeneous treatment effect. Simulations were carried out as described in Section 4.2, but with the individual treatment effect determined by the covariates: $\tau(X_i) = 1 + X{i1}/4$.
-
-\pagebreak
-
-```{r}
-dat <- lapply(1:10, function(x) read_data_1000(x, "../data/tuning/sigma_2/nsim_1000/")) %>%
-  bind_rows() %>%
-  filter(k <= 5)
-```
-
-```{r}
-true_tau <- 1
-
-dat <- dat %>% mutate(
-              squared_err = (estimate-true_tau)**2,
-              k = as.factor(k))
-
-plt_data <- dat %>%
-  group_by(method, k, rho) %>% 
-  summarize(Bias = mean(estimate) - true_tau, 
-            median_gamma = median(gamma), 
-            Standard.Deviation = sd(estimate),
-            MSE = Bias^2 + Standard.Deviation^2) %>%
-  ungroup() %>%
-  mutate(method = recode(method, propensity = "Propensity", 
-                         mahalanobis = "Mahalanobis", 
-                         prognostic = "Pilot"))
-```
-
-```{r, echo = FALSE}
-plt_data <- plt_data %>%
-  mutate(method = factor(method, levels = c("Mahalanobis", "Propensity", "Pilot")))
-```
-
-```{r, fig.width=8.5, fig.height=9.4, echo = FALSE}
-a <- ggplot(plt_data, aes(x = rho, y = Bias, group = k, color = k)) +
-  geom_line() + geom_point() +
-  xlab(expression(paste("Correlation, ", rho)))+
-  facet_wrap(~method) +
-  scale_color_brewer(palette="RdYlBu")
-
-b <- ggplot(plt_data, aes(x = rho, y = Standard.Deviation, group = k, color = k)) +
-  geom_line() + geom_point() + facet_wrap(~method) +
-    ylab("Standard Deviation")+
-  xlab(expression(paste("Correlation, ", rho)))+
-  scale_color_brewer(palette="RdYlBu")
-
-c <- ggplot(plt_data, aes(x = rho, y = MSE, group = k, color = k)) +
-  geom_line() + geom_point() + 
-  xlab(expression(paste("Correlation, ", rho)))+
-  facet_wrap(~method)+
-  scale_color_brewer(palette="RdYlBu")
-
-d <- ggplot(plt_data, aes(x = rho, y = median_gamma, group = k, color = k)) +
-  geom_line() + geom_point() +
-  ylab(expression(paste("Median ", Gamma))) +
-  xlab(expression(paste("Correlation, ", rho)))+
-  facet_wrap(~method) + 
-  scale_color_brewer(palette="RdYlBu")
-
-ggarrange(a, b, c, d, ncol = 1, nrow = 4, common.legend = TRUE, legend = "right", labels = "AUTO")
-```
-
-**Supplementary Figure 6:** Bias, standard deviation, MSE and median gamma design sensitivity when the random noise contributing to the outcome is increased.  All simulation parameters are the same as described in Section 4.2, except that $\sigma = 2$ This increases the difficulty of fitting the prognostic score, diminishing the relative performance of pilot matching in terms of MSE and sensitivity.
+**Supplementary Figure 9:** Bias, standard deviation, MSE, and median $\Gamma$ from matching estimators for simulations with a heterogeneous treatment effect. Simulations were carried out as described in Section 4.2, but with the individual treatment effect determined by the covariates: $\tau(X_i) = 1 + X{i1}/4$.
