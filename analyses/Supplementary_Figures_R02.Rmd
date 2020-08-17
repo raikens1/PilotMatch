@@ -1,6 +1,6 @@
 ---
 title: "Supplementary Figures"
-subtitle: 'Pilot Designs: Using Abundant Data Thoughtfully'
+subtitle: 'A Pilot Design for Observational Studies: Using Abundant Data Thoughtfully'
 output: pdf_document
 ---
 
